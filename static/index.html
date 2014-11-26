@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="//ajax.googleapis.com/ajax/libs/jquerymobile/1.4.3/jquery.mobile.min.css"/>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    <script src="//ajax.googleapis.com/ajax/libs/jquerymobile/1.4.3/jquery.mobile.min.js"></script>
+    <script src="/static/script.js"></script>
+    <title>RTP streaming config</title>
+</head>
+<body>
+
+<div data-role="content">
+
+    <div id="servers" data-role="page">
+        <div data-role="header">
+            <div data-role="navbar">
+                <ul>
+                    <li><a href="#servers" class="ui-btn-active ui-state-persist">Servers</a></li>
+                    <li><a href="#receivers">Receivers</a></li>
+                </ul>
+            </div>
+        </div>
+        <div role="main" class="ui-content" id="server-list"></div>
+    </div>
+    <!-- /page: servers -->
+
+    <div id="receivers" data-role="page">
+        <div data-role="header">
+            <div data-role="navbar">
+                <ul>
+                    <li><a href="#servers">Servers</a></li>
+                    <li><a href="#receivers" class="ui-btn-active ui-state-persist">Receivers</a></li>
+                </ul>
+            </div>
+        </div>
+        <div role="main" class="ui-content" id="receiver-list"></div>
+    </div>
+    <!-- /page: receivers -->
+
+</div>
+</body>

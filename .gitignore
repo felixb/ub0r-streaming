@@ -1,7 +1,9 @@
+<<<<<<< HEAD
 # Compiled Object files, Static and Dynamic libs (Shared Objects)
 *.o
 *.a
 *.so
+*.out
 
 # Folders
 _obj
@@ -22,3 +24,19 @@ _testmain.go
 *.exe
 *.test
 *.prof
+
+# project/ide files
+.idea
+*.iml
+
+# output
+dist
+*tar.gz
+rtp-config
+rtp-receiver
+rtp-sender
+
+# local stuff
+target
+make-on-rsp0.sh
+backends.yaml
