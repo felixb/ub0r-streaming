@@ -11,14 +11,6 @@ import (
 	"github.com/ziutek/gst"
 )
 
-const (
-	retryInterval = 10 * time.Second
-)
-
-var (
-	configChan = make(chan *Config, 2)
-)
-
 func getServer(config *Config, receiverName string) *Server {
 	return config.Receivers[receiverName]
 }
@@ -34,21 +26,7 @@ func checkServer(server *Server) bool {
 	return err == nil
 }
 
-func onMessage(bus *gst.Bus, msg *gst.Message) {
-	log.Info("message: %s", msg.GetType())
-	switch msg.GetType() {
-	case gst.MESSAGE_EOS:
-		configChan<-nil
-	case gst.MESSAGE_ERROR:
-		err, debug := msg.ParseError()
-		log.Error("Error: %s (debug: %s)", err, debug)
-		// try to reconnect
-		time.Sleep(retryInterval)
-		configChan<-nil
-	}
-}
-
-func buildPipeline(server *Server) *gst.Pipeline {
+func buildPipeline(m *Manager, server *Server) {
 	src := gst.ElementFactoryMake("tcpclientsrc", "tcpclientsrc")
 	checkElem(src, "tcpclientsrc")
 	src.SetProperty("host", server.Host)
@@ -64,81 +42,75 @@ func buildPipeline(server *Server) *gst.Pipeline {
 	checkElem(sink, "alsasink")
 	sink.SetProperty("sync", false)
 
-	pl := gst.NewPipeline("pipeline")
-	bus := pl.GetBus()
+	m.Pipeline = gst.NewPipeline("pipeline")
+	bus := m.Pipeline.GetBus()
 	bus.AddSignalWatch()
-	bus.Connect("message", onMessage, nil)
-
-	log.Debug("added: %v", pl.Add(src, demux, dec, sink))
-	log.Debug("linked: %v", src.Link(demux))
+	bus.Connect("message", m.onMessage, nil)
 	demux.ConnectNoi("pad-added", onPadAdded, dec.GetStaticPad("sink"))
-	log.Debug("linked: %v", dec.Link(sink))
 
-	return pl
+	log.Debug("added: %v", m.Pipeline.Add(src, demux, dec, sink))
+	log.Debug("linked: %v", src.Link(demux))
+	log.Debug("linked: %v", dec.Link(sink))
 }
 
-func playPipeline(server *Server) *gst.Pipeline {
+func playPipeline(m *Manager, server *Server) {
+	m.Pipeline = nil
 	if checkServer(server) {
-		pl := buildPipeline(server)
-		pl.SetState(gst.STATE_PLAYING)
-		return pl
+		buildPipeline(m, server)
+		m.StartPipeline()
 	} else {
 		// schedule recheck
 		time.Sleep(retryInterval)
-		configChan<-nil
-		return nil
+		m.ConfigSync<-nil
 	}
 }
 
-func loop(configUri, receiverName string) {
+func loop(m *Manager) {
 	var config *Config
 	var err error
 	for true {
 		log.Debug("starting new pipeline")
 		if config == nil {
-			config, err = fetchConfig(configUri, false)
+			config, err = fetchConfig(m.ConfigUri, false)
 			if err != nil {
 				log.Error("error fetching config: %s", err)
 				os.Exit(1)
 			}
 		}
 
-		var pl *gst.Pipeline
-		server := getServer(config, receiverName)
+		server := getServer(config, m.Name)
 		if server != nil {
 			log.Info("connectiong to server: %s:%d", server.Host, server.Port)
-			pl = playPipeline(server)
+			playPipeline(m, server)
 		} else {
-			log.Info("unable to find suitable server for myself (%s), waiting for new config", receiverName)
+			log.Info("unable to find suitable server for myself (%s), waiting for new config", m.Name)
 		}
 		// watch state/config changes and restart pipeline
 		var newServer *Server
 		for newServer == nil || (server != nil && server.Host == newServer.Host && server.Port == newServer.Port) {
-			config = <-configChan
+			config = <-m.ConfigSync
 			log.Debug("got new config: %s", config)
 			if config == nil {
 				// state changed start all over
 				break
 			}
-			newServer = getServer(config, receiverName)
+			newServer = getServer(config, m.Name)
 		}
-		if pl != nil {
-			pl.SetState(gst.STATE_NULL)
-			pl.Unref()
-		}
+		m.StopPipeline()
 	}
 }
 
 func main() {
 	initLogger()
 	hostname, _ := os.Hostname()
-	name := flag.String("name", hostname, "receiver name")
-	configUri := flag.String("config-server", "http://localhost:8080", "config server base uri")
+	m := NewManager()
+	flag.StringVar(&m.Name, "name", hostname, "receiver name")
+	flag.StringVar(&m.ConfigUri, "config-server", "http://localhost:8080", "config server base uri")
 	flag.Parse()
 
 	log.Debug("starting receiver")
-	go loop(*configUri, *name)
-	go watchConfig(*configUri, *name, configChan)
+	go loop(m)
+	go watchConfig(m)
 	log.Debug("start gst loop")
 	glib.NewMainLoop(nil).Run()
 	log.Debug("receiver stopped")

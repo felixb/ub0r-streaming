@@ -4,18 +4,9 @@ import (
 	"flag"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/ziutek/glib"
 	"github.com/ziutek/gst"
-)
-
-const (
-	retryInterval = 10 * time.Second
-)
-
-var (
-	configChan = make(chan *Config)
 )
 
 func getRadio(config *Config, serverName string) *Radio {
@@ -34,26 +25,6 @@ func findServer(backends *Backends, serverName string) *Server {
 		}
 	}
 	return nil
-}
-
-func onMessage(bus *gst.Bus, msg *gst.Message) {
-	t := msg.GetType()
-	if t == gst.MESSAGE_BUFFERING {
-		// ignore
-		return
-	}
-
-	log.Info("message: %s", t)
-	switch t {
-	case gst.MESSAGE_EOS:
-		configChan<-nil
-	case gst.MESSAGE_ERROR:
-		err, debug := msg.ParseError()
-		log.Error("Error: %s (debug: %s)", err, debug)
-		// try to reconnect
-		time.Sleep(retryInterval)
-		configChan<-nil
-	}
 }
 
 func buildSrc(uri string) *gst.Element {
@@ -79,7 +50,7 @@ func buildSrc(uri string) *gst.Element {
 	return src
 }
 
-func buildPipeline(uri string, config *Server) *gst.Pipeline {
+func buildPipeline(m *Manager, uri string, config *Server) {
 	src := buildSrc(uri)
 	pipe1 := gst.ElementFactoryMake("audioconvert", "audioconvert")
 	checkElem(pipe1, "audioconvert")
@@ -98,37 +69,35 @@ func buildPipeline(uri string, config *Server) *gst.Pipeline {
 	sink.SetProperty("host", config.Host)
 	sink.SetProperty("port", config.Port)
 
-	pl := gst.NewPipeline("pipeline")
-	bus := pl.GetBus()
+	m.Pipeline = gst.NewPipeline("pipeline")
+	bus := m.Pipeline.GetBus()
 	bus.AddSignalWatch()
-	bus.Connect("message", onMessage, nil)
+	bus.Connect("message", m.onMessage, nil)
 	src.ConnectNoi("pad-added", onPadAdded, pipe1.GetStaticPad("sink"))
 
-	log.Debug("added: %v", pl.Add(src, pipe1, pipe2, pipe3, pipe4, sink))
+	log.Debug("added: %v", m.Pipeline.Add(src, pipe1, pipe2, pipe3, pipe4, sink))
 	log.Debug("linked: %v", src.Link(pipe1))
 	log.Debug("linked: %v", pipe1.Link(pipe2))
 	log.Debug("linked: %v", pipe2.Link(pipe3))
 	log.Debug("linked: %v", pipe3.Link(pipe4))
 	log.Debug("linked: %v", pipe4.Link(sink))
-
-	return pl
 }
 
-func playPipeline(uri string, config *Server) *gst.Pipeline {
-	pl := buildPipeline(uri, config)
-	pl.SetState(gst.STATE_PLAYING)
-	return pl
+func playPipeline(m *Manager, uri string, config *Server) {
+	m.Pipeline = nil
+	buildPipeline(m, uri, config)
+	m.StartPipeline()
 }
 
-func loop(configUri, serverName, staticUri string) {
+func loop(m *Manager) {
 	var config *Config
 	var err error
-	backends, err := fetchBackends(configUri, false)
+	backends, err := fetchBackends(m.ConfigUri, false)
 	if err != nil {
 		log.Error("error fetching backend config: %s", err)
 		// TODO something sane
 	}
-	me := findServer(backends, serverName)
+	me := findServer(backends, m.Name)
 	if me == nil {
 		log.Error("unable to find myself in backend config")
 		// TODO something sane
@@ -136,61 +105,57 @@ func loop(configUri, serverName, staticUri string) {
 	for true {
 		log.Debug("starting new pipeline")
 		if config == nil {
-			config, err = fetchConfig(configUri, false)
+			config, err = fetchConfig(m.ConfigUri, false)
 			if err != nil {
 				log.Error("error fetching config: %s", err)
 				os.Exit(1)
 			}
 		}
 
-		var pl *gst.Pipeline
-		if staticUri != "" {
-			log.Info("starting static stream: %s", staticUri)
-			pl = playPipeline(staticUri, me)
-			config = <-configChan
+		if m.StaticUri != "" {
+			log.Info("starting static stream: %s", m.StaticUri)
+			playPipeline(m, m.StaticUri, me)
+			config = <-m.ConfigSync
 		} else {
-			radio := getRadio(config, serverName)
+			radio := getRadio(config, m.Name)
 			if radio != nil && radio.Uri != "off" {
 				log.Info("starting radio: %s", radio.Uri)
-				pl = playPipeline(radio.Uri, me)
+				 playPipeline(m, radio.Uri, me)
 			} else if radio != nil && radio.Uri == "off" {
 				log.Info("radio turned off, waiting fo new config")
 			} else {
-				log.Info("unable to find suitable radio for myself (%s), waiting for new config", serverName)
+				log.Info("unable to find suitable radio for myself (%s), waiting for new config", m.Name)
 			}
 			// watch state/config changes and restart pipeline
 			var newRadio *Radio
 			for newRadio == nil || (radio != nil && radio.Uri == newRadio.Uri) {
-				config = <-configChan
+				config = <-m.ConfigSync
 				log.Debug("got new config: %s", config)
 				if config == nil {
 					// state changed start all over
 					break
 				}
-				newRadio = getRadio(config, serverName)
+				newRadio = getRadio(config, m.Name)
 				log.Debug("new radio: %s", newRadio)
 			}
 		}
-		if pl != nil {
-			log.Info("stopping pipeline")
-			pl.SetState(gst.STATE_NULL)
-			pl.Unref()
-		}
+		m.StopPipeline()
 	}
 }
 
 func main() {
 	initLogger()
 	hostname, _ := os.Hostname()
-	name := flag.String("name", hostname, "server name")
-	configUri := flag.String("config-server", "http://localhost:8080", "config server base uri")
-	staticUri := flag.String("static", "", "send a static stream")
+	m := NewManager()
+	flag.StringVar(&m.Name, "name", hostname, "server name")
+	flag.StringVar(&m.ConfigUri, "config-server", "http://localhost:8080", "config server base uri")
+	flag.StringVar(&m.StaticUri, "static", "", "send a static stream")
 	flag.Parse()
 
 	log.Debug("starting receiver")
-	go loop(*configUri, *name, *staticUri)
-	if *staticUri == "" {
-		go watchConfig(*configUri, *name, configChan)
+	go loop(m)
+	if m.StaticUri  == "" {
+		go watchConfig(m)
 	}
 	log.Debug("start gst loop")
 	glib.NewMainLoop(nil).Run()
