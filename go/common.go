@@ -26,6 +26,7 @@ type Backends struct {
 	Servers       []*Server
 	StaticServers []*Server
 	Receivers     []*string
+	Names         map[string]*string
 }
 
 var (

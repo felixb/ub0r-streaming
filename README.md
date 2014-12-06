@@ -55,6 +55,10 @@ The configuration is made in yaml format:
       - rsp0
       - rsp1
       - t420
+    names:
+      rsp0: Living room
+      rsp1: Kitchen
+      t420: Notebook
 
 # Build
 
