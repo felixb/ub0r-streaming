@@ -27,19 +27,12 @@ func checkServer(server *Server) bool {
 }
 
 func buildPipeline(m *Manager, server *Server) {
-	src := gst.ElementFactoryMake("tcpclientsrc", "tcpclientsrc")
-	checkElem(src, "tcpclientsrc")
+	src := makeElem("tcpclientsrc")
 	src.SetProperty("host", server.Host)
 	src.SetProperty("port", server.Port)
-
-	demux := gst.ElementFactoryMake("oggdemux", "oggdemux")
-	checkElem(demux, "oggdemux")
-
-	dec := gst.ElementFactoryMake("opusdec", "opusdec")
-	checkElem(dec, "opusdec")
-
-	sink := gst.ElementFactoryMake("alsasink", "alsasink")
-	checkElem(sink, "alsasink")
+	demux := makeElem("oggdemux")
+	dec := makeElem("opusdec")
+	sink := makeElem("alsasink")
 	sink.SetProperty("sync", false)
 
 	m.Pipeline = gst.NewPipeline("pipeline")
@@ -48,18 +41,25 @@ func buildPipeline(m *Manager, server *Server) {
 	bus.Connect("message", m.onMessage, nil)
 	demux.ConnectNoi("pad-added", onPadAdded, dec.GetStaticPad("sink"))
 
-	log.Debug("added: %v", m.Pipeline.Add(src, demux, dec, sink))
-	log.Debug("linked: %v", src.Link(demux))
-	log.Debug("linked: %v", dec.Link(sink))
+	addElem(m.Pipeline, src)
+	addElem(m.Pipeline, demux)
+	addElem(m.Pipeline, dec)
+	addElem(m.Pipeline, sink)
+	linkElems(src, demux)
+	linkElems(dec, sink)
 }
 
 func playPipeline(m *Manager, server *Server) {
 	m.Pipeline = nil
 	if checkServer(server) {
+		m.RetryCount = 0
 		buildPipeline(m, server)
 		m.StartPipeline()
+	} else if m.RetryCount >= maxRetry {
+		log.Warning("max retries reached, wait for new config")
 	} else {
 		// schedule recheck
+		m.RetryCount += 1
 		time.Sleep(retryInterval)
 		m.ConfigSync<-nil
 	}
@@ -80,14 +80,18 @@ func loop(m *Manager) {
 
 		server := getServer(config, m.Name)
 		if server != nil {
-			log.Info("connectiong to server: %s:%d", server.Host, server.Port)
+			log.Info("connecting to server: %s:%d", server.Host, server.Port)
 			playPipeline(m, server)
 		} else {
 			log.Info("unable to find suitable server for myself (%s), waiting for new config", m.Name)
 		}
 		// watch state/config changes and restart pipeline
 		var newServer *Server
+		i := 0
 		for newServer == nil || (server != nil && server.Host == newServer.Host && server.Port == newServer.Port) {
+			log.Debug("wait for new config")
+			log.Debug("old server: %s", server)
+			log.Debug("new server: %s", newServer)
 			config = <-m.ConfigSync
 			log.Debug("got new config: %s", config)
 			if config == nil {
@@ -95,18 +99,27 @@ func loop(m *Manager) {
 				break
 			}
 			newServer = getServer(config, m.Name)
+			// exit loop if server == off
+			if newServer == nil {
+				if i > 0 {
+					time.Sleep(retryInterval)
+				}
+				break
+			}
+			i += 1
 		}
 		m.StopPipeline()
 	}
 }
 
 func main() {
-	initLogger()
 	hostname, _ := os.Hostname()
 	m := NewManager()
 	flag.StringVar(&m.Name, "name", hostname, "receiver name")
 	flag.StringVar(&m.ConfigUri, "config-server", "http://localhost:8080", "config server base uri")
+	verbose := flag.Bool("verbose", false, "verbose logging")
 	flag.Parse()
+	initLogger(*verbose)
 
 	log.Debug("starting receiver")
 	go loop(m)

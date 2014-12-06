@@ -32,11 +32,15 @@ var (
 	log = logging.MustGetLogger("main")
 )
 
-func initLogger() {
+func initLogger(verbose bool) {
 	format := logging.MustStringFormatter("%{color}%{time:15:04:05} %{level:.6s} ▶ %{shortfunc} %{color:reset} %{message}")
 	backend := logging.NewLogBackend(os.Stderr, "", 0)
 	formatter := logging.NewBackendFormatter(backend, format)
 	leveled := logging.AddModuleLevel(formatter)
-	leveled.SetLevel(logging.DEBUG, "")
+	if verbose {
+		leveled.SetLevel(logging.DEBUG, "")
+	} else {
+		leveled.SetLevel(logging.INFO, "")
+	}
 	log.SetBackend(leveled)
 }

@@ -271,12 +271,14 @@ func scheduleSaveConfigCache(configFile *string) {
 // MAIN --------------------------------------------
 
 func main() {
-	initLogger()
 	backendFile := flag.String("backends", "", "Backend config file")
 	configFile := flag.String("config-cache", configCacheFile, "File for persisting config state")
 	port := flag.Int("http", 8080, "Port for binding the config server")
 	staticDir = flag.String("webroot", "static", "Directory for serving static content")
+	verbose := flag.Bool("verbose", false, "verbose logging")
 	flag.Parse()
+	initLogger(*verbose)
+
 
 	if *backendFile == "" {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])

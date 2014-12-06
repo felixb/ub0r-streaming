@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	retryInterval = 10 * time.Second
+	retryInterval = 5 * time.Second
+	maxRetry = 24
 )
 
 // ------------ manager
@@ -23,6 +24,7 @@ type Manager struct {
 	StaticUri  string
 	State      gst.State
 	Name       string
+	RetryCount int
 }
 
 func NewManager() *Manager {
@@ -35,10 +37,13 @@ func (m *Manager) onMessage(bus *gst.Bus, msg *gst.Message) {
 	t := msg.GetType()
 	switch t {
 	case gst.MESSAGE_STATE_CHANGED:
-		s, _, _ := m.Pipeline.GetState(100)
-		if s != m.State {
-			log.Info("pipeline state: %s", s)
-			m.State = s
+		pl := m.Pipeline
+		if pl != nil {
+			s, _, _ := pl.GetState(100)
+			if s != m.State {
+				log.Info("pipeline state: %s", s)
+				m.State = s
+			}
 		}
 	case gst.MESSAGE_EOS:
 		log.Info("pipeline: end of stream")
@@ -52,7 +57,7 @@ func (m *Manager) onMessage(bus *gst.Bus, msg *gst.Message) {
 	case gst.MESSAGE_BUFFERING:
 		// ignore
 	default:
-		log.Info("pipeline message: %s", t)
+		log.Debug("pipeline message: %s", t)
 	}
 }
 
@@ -74,6 +79,31 @@ func (m *Manager) StopPipeline() {
 
 // ------------ gst stuff
 
+func checkElem(e interface{}, name string) {
+	if e == nil {
+		log.Fatal("can't make element: %s", name)
+		os.Exit(1) // TODO don't exit
+	}
+}
+
+func makeElem(name string) *gst.Element {
+	e := gst.ElementFactoryMake(name, name)
+	checkElem(e, name)
+	return e
+}
+
+func addElem(pl *gst.Pipeline, e *gst.Element) bool {
+	r := pl.Add(e)
+	log.Debug("add %s to pipeline: %v", e.GetName(), r)
+	return r
+}
+
+func linkElems(src, sink *gst.Element) bool {
+	r :=  src.Link(sink)
+	log.Debug("link %s -> %s: %v", src.GetName(), sink.GetName(), r)
+	return r
+}
+
 func onPadAdded(sinkPad, newPad *gst.Pad) {
 	log.Debug("pad-added: %s", newPad.GetName())
 	log.Debug("sink pad: %s", sinkPad.GetName())
@@ -83,13 +113,6 @@ func onPadAdded(sinkPad, newPad *gst.Pad) {
 		}
 	} else {
 		log.Error("unable to link pads: %s/%s", newPad.GetName(), sinkPad.GetName())
-	}
-}
-
-func checkElem(e interface{}, name string) {
-	if e == nil {
-		log.Fatal("can't make element: %s", name)
-		os.Exit(1) // TODO don't exit
 	}
 }
 

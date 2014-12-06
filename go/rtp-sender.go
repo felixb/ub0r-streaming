@@ -30,42 +30,34 @@ func findServer(backends *Backends, serverName string) *Server {
 func buildSrc(uri string) *gst.Element {
 	var src *gst.Element
 	if uri == "test" {
-		src = gst.ElementFactoryMake("audiotestsrc", "audiotestsrc")
+		src = makeElem("audiotestsrc")
 	} else if strings.HasPrefix(uri, "alsa") {
-		src = gst.ElementFactoryMake("alsasrc", "alsasrc")
+		src = makeElem("alsasrc")
 		if strings.HasPrefix(uri, "alsa:") {
-			checkElem(src, "source")
 			parts := strings.SplitN(uri, ":", 2)
 			src.SetProperty("device", parts[1])
 		}
 	} else if strings.HasPrefix(uri, "pulse") {
 		// TODO pulse mirror
 	} else {
-		src = gst.ElementFactoryMake("uridecodebin", "uridecodebin")
-		checkElem(src, "source")
+		src = makeElem("uridecodebin")
 		src.SetProperty("uri", uri)
 		src.SetProperty("buffer-duration", 1000)
 	}
-	checkElem(src, "source")
 	return src
 }
 
 func buildPipeline(m *Manager, uri string, config *Server) {
 	src := buildSrc(uri)
-	pipe1 := gst.ElementFactoryMake("audioconvert", "audioconvert")
-	checkElem(pipe1, "audioconvert")
-	pipe2 := gst.ElementFactoryMake("audioresample", "audioresample")
-	checkElem(pipe2, "audioresample")
-	pipe3 := gst.ElementFactoryMake("opusenc", "opusenc")
-	checkElem(pipe3, "opusenc")
+	pipe1 := makeElem("audioconvert")
+	pipe2 := makeElem("audioresample")
+	pipe3 := makeElem("opusenc")
 	pipe3.SetProperty("bitrate", 96000)
 	pipe3.SetProperty("dtx", true)
 	pipe3.SetProperty("inband-fec", false)
 	pipe3.SetProperty("packet-loss-percentage", 0)
-	pipe4 := gst.ElementFactoryMake("oggmux", "oggmux")
-	checkElem(pipe4, "oggmux")
-	sink := gst.ElementFactoryMake("tcpserversink", "tcpserversink")
-	checkElem(sink, "tcpserversink")
+	pipe4 := makeElem("oggmux")
+	sink := makeElem("tcpserversink")
 	sink.SetProperty("host", config.Host)
 	sink.SetProperty("port", config.Port)
 
@@ -75,12 +67,17 @@ func buildPipeline(m *Manager, uri string, config *Server) {
 	bus.Connect("message", m.onMessage, nil)
 	src.ConnectNoi("pad-added", onPadAdded, pipe1.GetStaticPad("sink"))
 
-	log.Debug("added: %v", m.Pipeline.Add(src, pipe1, pipe2, pipe3, pipe4, sink))
-	log.Debug("linked: %v", src.Link(pipe1))
-	log.Debug("linked: %v", pipe1.Link(pipe2))
-	log.Debug("linked: %v", pipe2.Link(pipe3))
-	log.Debug("linked: %v", pipe3.Link(pipe4))
-	log.Debug("linked: %v", pipe4.Link(sink))
+	addElem(m.Pipeline, src)
+	addElem(m.Pipeline, pipe1)
+	addElem(m.Pipeline, pipe2)
+	addElem(m.Pipeline, pipe3)
+	addElem(m.Pipeline, pipe4)
+	addElem(m.Pipeline, sink)
+	linkElems(src, pipe1)
+	linkElems(pipe1, pipe2)
+	linkElems(pipe2, pipe3)
+	linkElems(pipe3, pipe4)
+	linkElems(pipe4, sink)
 }
 
 func playPipeline(m *Manager, uri string, config *Server) {
@@ -144,13 +141,15 @@ func loop(m *Manager) {
 }
 
 func main() {
-	initLogger()
 	hostname, _ := os.Hostname()
 	m := NewManager()
 	flag.StringVar(&m.Name, "name", hostname, "server name")
 	flag.StringVar(&m.ConfigUri, "config-server", "http://localhost:8080", "config server base uri")
 	flag.StringVar(&m.StaticUri, "static", "", "send a static stream")
+	verbose := flag.Bool("verbose", false, "verbose logging")
 	flag.Parse()
+	initLogger(*verbose)
+
 
 	log.Debug("starting receiver")
 	go loop(m)
