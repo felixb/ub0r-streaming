@@ -38,13 +38,6 @@ function getReceiverId(receiver) {
     return 'receiver-' + receiver;
 }
 
-// translate server/receiver into name
-// uses backends.Name map
-function getName(e) {
-    name = backends.Names[e];
-    return name !== 'undefined' ? name : e;
-}
-
 // get data-icon value
 function getIcon(active, uri) {
     if (active) {
@@ -63,7 +56,7 @@ function injectServer(s) {
         radios += '<li data-icon="' + getIcon(r.Uri == activeRadio.Uri, r.Uri) + '"><a class="api-call" href="/api/server/' + s.Host + '/radio/' + i + '">' + r.Name + '</a></li>';
     });
     radios += '</ul>';
-    var item = '<div id="' + id + '"><h4>' + getName(s.Host) + '</h4>' + radios + '</div>'
+    var item = '<div id="' + id + '"><h4>' + s.Name + '</h4>' + radios + '</div>'
     $('#server-list').append(item);
 }
 
@@ -73,21 +66,21 @@ function injectReceiver(r) {
     var servers = '<ul class="receiver-list-ul" data-role="listview" data-inset="true">';
     var activeServer = getActiveServer(r);
     // inject 'off' server
-    servers += '<li data-icon="' + getIcon('off' == activeServer.Host, 'off') + '"><a class="api-call" href="/api/receiver/' + r + '/off/0">' + getName('off') + '</a></li>';
+    servers += '<li data-icon="' + getIcon('off' == activeServer.Host, 'off') + '"><a class="api-call" href="/api/receiver/' + r + '/off/0">off</a></li>';
     // add servers
     if (backends.Servers) {
         $.each(backends.Servers, function(i, e) {
-            servers += '<li data-icon="' + getIcon(e.Host == activeServer.Host, e.Host) + '"><a class="api-call" href="/api/receiver/' + r + '/server/' + i + '">' + getName(e.Host) + '</a></li>';
+            servers += '<li data-icon="' + getIcon(e.Host == activeServer.Host, e.Host) + '"><a class="api-call" href="/api/receiver/' + r + '/server/' + i + '">' + e.Name + '</a></li>';
         });
     }
     // add static servers
     if (backends.StaticServers) {
         $.each(backends.StaticServers, function(i, e) {
-            servers += '<li data-icon="' + getIcon(e.Host == activeServer.Host, e.Host) + '"><a class="api-call" href="/api/receiver/' + r + '/static/' + i + '">' + getName(e.Host) + '</a></li>';
+            servers += '<li data-icon="' + getIcon(e.Host == activeServer.Host, e.Host) + '"><a class="api-call" href="/api/receiver/' + r + '/static/' + i + '">' + e.Name + '</a></li>';
         });
     }
     servers += '</ul>';
-    $('#receiver-list').append('<div id="' + id + '"><h4>' + getName(r) + '</h4>' + servers + '</div>');
+    $('#receiver-list').append('<div id="' + id + '"><h4>' + r.Name + '</h4>' + servers + '</div>');
 }
 
 // callback to create html elements representing the backends

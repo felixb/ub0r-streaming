@@ -43,22 +43,21 @@ The configuration is made in yaml format:
         uri: test
     # a list of servers to manage
     servers:
-      - host: rsp0
+      - name: Living room
+        host: rsp0
         port: 48100
     # a list of static unmanaged servers
     # e.g. for streaming audio from your pc into the network
     staticservers:
-      - host: t420
+      - name: Notebook
+        host: t420
         port: 48100
     # a list of receivers who are allowed to connect to any server
     receivers:
-      - rsp0
-      - rsp1
-      - t420
-    names:
-      rsp0: Living room
-      rsp1: Kitchen
-      t420: Notebook
+      - name: Living room
+        host: rsp0
+      - name: Kitchen
+        host: rsp1
 
 # Build
 

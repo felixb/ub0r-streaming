@@ -12,10 +12,17 @@ type Radio struct {
 }
 
 type Server struct {
+	Name string
 	Host string
 	Port int
 }
 
+type Receiver struct {
+	Name string
+	Host string
+}
+
+// .Host is key in this map
 type Config struct {
 	Servers   map[string]*Radio
 	Receivers map[string]*Server
@@ -25,8 +32,7 @@ type Backends struct {
 	Radios        []*Radio
 	Servers       []*Server
 	StaticServers []*Server
-	Receivers     []*string
-	Names         map[string]*string
+	Receivers     []*Receiver
 }
 
 var (

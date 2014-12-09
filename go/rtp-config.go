@@ -142,7 +142,8 @@ func serveApiReceiver(w http.ResponseWriter, req *http.Request) {
 	}
 
 	for i := range backends.Receivers {
-		if *backends.Receivers[i] == receiverName {
+		r := *backends.Receivers[i]
+		if r.Host == receiverName {
 			log.Debug("setting new server for %s: %s", receiverName, server)
 			config.Receivers[receiverName] = server
 			configCond.Broadcast()
@@ -239,7 +240,7 @@ func loadConfigCache(configFile *string) {
 			config.Servers[s.Host] = backends.Radios[0]
 		}
 		for _, r := range backends.Receivers {
-			config.Receivers[*r] = nil
+			config.Receivers[r.Host] = nil
 		}
 	}
 }
