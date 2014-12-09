@@ -2,9 +2,14 @@ package main
 
 import (
 	"os"
+	"time"
 
 	"github.com/op/go-logging"
 )
+
+type Pinger interface {
+	Ping()
+}
 
 type Radio struct {
 	Name string
@@ -12,14 +17,16 @@ type Radio struct {
 }
 
 type Server struct {
-	Name string
-	Host string
-	Port int
+	Name     string
+	Host     string
+	Port     int
+	LastPing int64
 }
 
 type Receiver struct {
-	Name string
-	Host string
+	Name     string
+	Host     string
+	LastPing int64
 }
 
 // .Host is key in this map
@@ -36,8 +43,21 @@ type Backends struct {
 }
 
 var (
-	log = logging.MustGetLogger("main")
+	log            = logging.MustGetLogger("main")
+	backendTimeout = 1 * time.Minute
 )
+
+// ----- interfaces -------------------------------
+
+func (e *Server) Ping() {
+	e.LastPing = time.Now().Unix()
+}
+
+func (e *Receiver) Ping() {
+	e.LastPing = time.Now().Unix()
+}
+
+// ----- logging -------------------------------
 
 func initLogger(verbose bool) {
 	format := logging.MustStringFormatter("%{color}%{time:15:04:05} %{level:.6s} ▶ %{shortfunc} %{color:reset} %{message}")

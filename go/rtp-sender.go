@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/ziutek/glib"
 	"github.com/ziutek/gst"
@@ -11,20 +12,6 @@ import (
 
 func getRadio(config *Config, serverName string) *Radio {
 	return config.Servers[serverName]
-}
-
-func findServer(backends *Backends, serverName string) *Server {
-	for _, s := range backends.Servers {
-		if s.Host == serverName {
-			return s
-		}
-	}
-	for _, s := range backends.StaticServers {
-		if s.Host == serverName {
-			return s
-		}
-	}
-	return nil
 }
 
 func setDevice(src *gst.Element, uri string) {
@@ -95,16 +82,6 @@ func playPipeline(m *Manager, uri string, config *Server) {
 func loop(m *Manager) {
 	var config *Config
 	var err error
-	backends, err := fetchBackends(m.ConfigUri, false)
-	if err != nil {
-		log.Error("error fetching backend config: %s", err)
-		// TODO something sane
-	}
-	me := findServer(backends, m.Name)
-	if me == nil {
-		log.Error("unable to find myself in backend config")
-		// TODO something sane
-	}
 	for true {
 		log.Debug("starting new pipeline")
 		if config == nil {
@@ -117,17 +94,17 @@ func loop(m *Manager) {
 
 		if m.StaticUri != "" {
 			log.Info("starting static stream: %s", m.StaticUri)
-			playPipeline(m, m.StaticUri, me)
+			playPipeline(m, m.StaticUri, m.Server())
 			config = <-m.ConfigSync
 		} else {
-			radio := getRadio(config, m.Name)
+			radio := getRadio(config, m.Server().Name)
 			if radio != nil && radio.Uri != "off" {
 				log.Info("starting radio: %s", radio.Uri)
-				 playPipeline(m, radio.Uri, me)
+				playPipeline(m, radio.Uri, m.Server())
 			} else if radio != nil && radio.Uri == "off" {
 				log.Info("radio turned off, waiting fo new config")
 			} else {
-				log.Info("unable to find suitable radio for myself (%s), waiting for new config", m.Name)
+				log.Info("unable to find suitable radio for myself (%s), waiting for new config", m.Server().Name)
 			}
 			// watch state/config changes and restart pipeline
 			var newRadio *Radio
@@ -138,7 +115,7 @@ func loop(m *Manager) {
 					// state changed start all over
 					break
 				}
-				newRadio = getRadio(config, m.Name)
+				newRadio = getRadio(config, m.Server().Name)
 				log.Debug("new radio: %s", newRadio)
 			}
 		}
@@ -146,10 +123,26 @@ func loop(m *Manager) {
 	}
 }
 
+func (m *Manager) scheduleBackendTimeout(c <-chan time.Time) {
+	for {
+		log.Debug("ping config server")
+		uri := m.ConfigUri + "/api/ping/"
+		if m.StaticUri == "" {
+			pingConfig(uri+"server", m.Backend)
+		} else {
+			pingConfig(uri+"static", m.Backend)
+		}
+		<-c
+	}
+}
+
 func main() {
 	hostname, _ := os.Hostname()
 	m := NewManager()
-	flag.StringVar(&m.Name, "name", hostname, "server name")
+	m.Backend = &Server{}
+	flag.StringVar(&m.Server().Name, "name", hostname, "server name")
+	flag.StringVar(&m.Server().Host, "host", hostname, "server host name")
+	flag.IntVar(&m.Server().Port, "port", 48100, "server port")
 	flag.StringVar(&m.ConfigUri, "config-server", "http://localhost:8080", "config server base uri")
 	flag.StringVar(&m.StaticUri, "static", "", "send a static stream")
 	verbose := flag.Bool("verbose", false, "verbose logging")
@@ -159,9 +152,10 @@ func main() {
 
 	log.Debug("starting receiver")
 	go loop(m)
-	if m.StaticUri  == "" {
+	if m.StaticUri == "" {
 		go watchConfig(m)
 	}
+	go m.scheduleBackendTimeout(time.Tick(backendTimeout / 2))
 	log.Debug("start gst loop")
 	glib.NewMainLoop(nil).Run()
 	log.Debug("receiver stopped")

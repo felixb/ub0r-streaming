@@ -20,7 +20,7 @@ function getActiveRadio(server) {
 // result is never undefined
 function getActiveServer(receiver) {
     try {
-        var s =  config.Receivers[receiver];
+        var s =  config.Receivers[receiver.Host];
         return s ? s : defaultServer;
     } catch (err) {
         console.log(err);
@@ -66,17 +66,17 @@ function injectReceiver(r) {
     var servers = '<ul class="receiver-list-ul" data-role="listview" data-inset="true">';
     var activeServer = getActiveServer(r);
     // inject 'off' server
-    servers += '<li data-icon="' + getIcon('off' == activeServer.Host, 'off') + '"><a class="api-call" href="/api/receiver/' + r + '/off/0">off</a></li>';
+    servers += '<li data-icon="' + getIcon('off' == activeServer.Host, 'off') + '"><a class="api-call" href="/api/receiver/' + r.Host + '/off/0">off</a></li>';
     // add servers
     if (backends.Servers) {
         $.each(backends.Servers, function(i, e) {
-            servers += '<li data-icon="' + getIcon(e.Host == activeServer.Host, e.Host) + '"><a class="api-call" href="/api/receiver/' + r + '/server/' + i + '">' + e.Name + '</a></li>';
+            servers += '<li data-icon="' + getIcon(e.Host == activeServer.Host, e.Host) + '"><a class="api-call" href="/api/receiver/' + r.Host + '/server/' + i + '">' + e.Name + '</a></li>';
         });
     }
     // add static servers
     if (backends.StaticServers) {
         $.each(backends.StaticServers, function(i, e) {
-            servers += '<li data-icon="' + getIcon(e.Host == activeServer.Host, e.Host) + '"><a class="api-call" href="/api/receiver/' + r + '/static/' + i + '">' + e.Name + '</a></li>';
+            servers += '<li data-icon="' + getIcon(e.Host == activeServer.Host, e.Host) + '"><a class="api-call" href="/api/receiver/' + r.Host + '/static/' + i + '">' + e.Name + '</a></li>';
         });
     }
     servers += '</ul>';
@@ -89,15 +89,19 @@ function injectBackends(data) {
 
     // create list of servers
     $('#server-list').empty();
-    $.each(backends.Servers, function(i, e) {
-        injectServer(e);
-    });
+    if (backends.Servers) {
+        $.each(backends.Servers, function(i, e) {
+            injectServer(e);
+        });
+    }
 
     // create list of receivers
     $('#receiver-list').empty();
-    $.each(backends.Receivers, function(i, e) {
-        injectReceiver(e);
-    });
+    if (backends.Receivers) {
+        $.each(backends.Receivers, function(i, e) {
+            injectReceiver(e);
+        });
+    }
 
     // init list views to make them look beautiful
     $('.server-list-ul').listview().listview('refresh');

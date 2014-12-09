@@ -78,12 +78,12 @@ func loop(m *Manager) {
 			}
 		}
 
-		server := getServer(config, m.Name)
+		server := getServer(config, m.Receiver().Name)
 		if server != nil {
 			log.Info("connecting to server: %s:%d", server.Host, server.Port)
 			playPipeline(m, server)
 		} else {
-			log.Info("unable to find suitable server for myself (%s), waiting for new config", m.Name)
+			log.Info("unable to find suitable server for myself (%s), waiting for new config", m.Receiver().Name)
 		}
 		// watch state/config changes and restart pipeline
 		var newServer *Server
@@ -98,7 +98,7 @@ func loop(m *Manager) {
 				// state changed start all over
 				break
 			}
-			newServer = getServer(config, m.Name)
+			newServer = getServer(config, m.Receiver().Name)
 			// exit loop if server == off
 			if newServer == nil {
 				if i > 0 {
@@ -112,10 +112,21 @@ func loop(m *Manager) {
 	}
 }
 
+func (m *Manager) scheduleBackendTimeout(c <-chan time.Time) {
+	for {
+		log.Debug("ping config server")
+		uri := m.ConfigUri+"/api/ping/"
+		pingConfig(uri + "receiver", m.Backend)
+		<-c
+	}
+}
+
 func main() {
 	hostname, _ := os.Hostname()
 	m := NewManager()
-	flag.StringVar(&m.Name, "name", hostname, "receiver name")
+	m.Backend = &Receiver{}
+	flag.StringVar(&m.Receiver().Name, "name", hostname, "receiver name")
+	flag.StringVar(&m.Receiver().Host, "host", hostname, "receiver host name")
 	flag.StringVar(&m.ConfigUri, "config-server", "http://localhost:8080", "config server base uri")
 	verbose := flag.Bool("verbose", false, "verbose logging")
 	flag.Parse()
@@ -124,6 +135,7 @@ func main() {
 	log.Debug("starting receiver")
 	go loop(m)
 	go watchConfig(m)
+	go m.scheduleBackendTimeout(time.Tick(backendTimeout / 2))
 	log.Debug("start gst loop")
 	glib.NewMainLoop(nil).Run()
 	log.Debug("receiver stopped")

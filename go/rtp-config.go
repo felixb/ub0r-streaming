@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"code.google.com/p/go.net/websocket"
 	"gopkg.in/yaml.v2"
@@ -29,7 +30,7 @@ var (
 
 // HTTP --------------------------------------------
 
-// /ws/config
+// WebSocket /ws/config
 func serveWsConfig(ws *websocket.Conn) {
 	log.Info("serve: /ws/config")
 
@@ -49,7 +50,89 @@ func serveWsConfig(ws *websocket.Conn) {
 	}
 }
 
-// /api/server/${server-name}/radio/${radio-id}
+func unmarshalReceiver(req *http.Request) (*Receiver, error) {
+	var o Receiver
+	decoder := json.NewDecoder(req.Body)
+	err := decoder.Decode(&o)
+	if err != nil {
+		return nil, err
+	}
+	return &o, nil
+}
+
+func unmarshalServer(req *http.Request) (*Server, error) {
+	var o Server
+	decoder := json.NewDecoder(req.Body)
+	err := decoder.Decode(&o)
+	if err != nil {
+		return nil, err
+	}
+	return &o, nil
+}
+
+func addReceiver(o *Receiver) {
+	log.Debug("receiver: %s", *o)
+	for i, oo := range backends.Receivers {
+		if oo.Host == o.Host {
+			backends.Receivers[i] = o
+			return
+		}
+	}
+	backends.Receivers = append(backends.Receivers, o)
+}
+
+func addServer(o *Server) {
+	for i, oo := range backends.Servers {
+		if oo.Host == o.Host {
+			backends.Servers[i] = o
+			return
+		}
+	}
+	backends.Servers = append(backends.Servers, o)
+}
+
+func addStatic(o *Server) {
+	for i, oo := range backends.StaticServers {
+		if oo.Host == o.Host {
+			backends.StaticServers[i] = o
+			return
+		}
+	}
+	backends.StaticServers = append(backends.StaticServers, o)
+}
+
+// POST /api/ping
+func serverApiPing(w http.ResponseWriter, req *http.Request) {
+	if req.URL.Path == "/api/ping/receiver" {
+		o, err := unmarshalReceiver(req)
+		if o != nil && err == nil {
+			addReceiver(o)
+			o.Ping()
+		} else {
+			log.Error("somthing went wrong parsing body: %s", err)
+		}
+	} else if req.URL.Path == "/api/ping/server" {
+		o, err := unmarshalServer(req)
+		if o != nil && err == nil {
+			addServer(o)
+			o.Ping()
+		} else {
+			log.Error("somthing went wrong parsing body: %s", err)
+		}
+	} else if req.URL.Path == "/api/ping/static" {
+		o, err := unmarshalServer(req)
+		if o != nil && err == nil {
+			addStatic(o)
+			o.Ping()
+		} else {
+			log.Error("somthing went wrong parsing body: %s", err)
+		}
+	} else {
+		log.Error("unknown path: %s", req.URL.Path)
+	}
+}
+
+// GET /api/server/${server-name}/radio/${radio-id}
 func serveApiServer(w http.ResponseWriter, req *http.Request) {
 	parts := strings.Split(req.URL.Path, "/")
 	if len(parts) != 6 {
@@ -97,7 +180,7 @@ func serveApiServer(w http.ResponseWriter, req *http.Request) {
 	http.Error(w, msg, http.StatusInternalServerError)
 }
 
-// /api/receiver/${receiver-name}/{server,static}/${server-id}
+// GET /api/receiver/${receiver-name}/{server,static}/${server-id}
 func serveApiReceiver(w http.ResponseWriter, req *http.Request) {
 	parts := strings.Split(req.URL.Path, "/")
 	if len(parts) != 6 {
@@ -184,6 +267,8 @@ func serve(w http.ResponseWriter, req *http.Request) {
 	if req.URL.Path == "/" {
 		localPath := *staticDir + "/index.html"
 		http.ServeFile(w, req, localPath)
+	} else if req.Method == "POST" && strings.HasPrefix(req.URL.Path, "/api/ping") {
+		serverApiPing(w, req)
 	} else if req.URL.Path == "/api/config" {
 		serveJson(w, req, config)
 	} else if req.URL.Path == "/api/backends" {
@@ -269,6 +354,37 @@ func scheduleSaveConfigCache(configFile *string) {
 	}
 }
 
+func scheduleBackendTimeout(c <-chan time.Time) {
+	for t := range c {
+		now := t.Unix()
+		threshold := now - int64(backendTimeout / time.Second)
+
+		for i := len(backends.Receivers) - 1; i >= 0 ; i-- {
+			o := backends.Receivers[i]
+			if o.LastPing < threshold {
+				log.Info("remove possibly dead receiver: %s", o.Host)
+				backends.Receivers = append(backends.Receivers[:i], backends.Receivers[i+1:]...)
+			}
+		}
+
+		for i := len(backends.Servers) - 1; i >= 0 ; i-- {
+			o := backends.Servers[i]
+			if o.LastPing < threshold {
+				log.Info("remove possibly dead server: %s", o.Host)
+				backends.Servers = append(backends.Servers[:i], backends.Servers[i+1:]...)
+			}
+		}
+
+		for i := len(backends.StaticServers) - 1; i >= 0 ; i-- {
+			o := backends.StaticServers[i]
+			if o.LastPing < threshold {
+				log.Info("remove possibly dead static server: %s", o.Host)
+				backends.StaticServers = append(backends.StaticServers[:i], backends.StaticServers[i+1:]...)
+			}
+		}
+	}
+}
+
 // MAIN --------------------------------------------
 
 func main() {
@@ -279,7 +395,6 @@ func main() {
 	verbose := flag.Bool("verbose", false, "verbose logging")
 	flag.Parse()
 	initLogger(*verbose)
-
 
 	if *backendFile == "" {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
@@ -294,6 +409,7 @@ func main() {
 	loadBackendsConfig(backendFile)
 	loadConfigCache(configFile)
 	go scheduleSaveConfigCache(configFile)
+	go scheduleBackendTimeout(time.Tick(backendTimeout))
 
 	httpd(*port)
 

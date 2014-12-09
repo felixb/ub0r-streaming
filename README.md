@@ -28,7 +28,8 @@ You'll need at least one receiver.
 
 # Configuration
 
-The RTP config server needs a list of streams, servers and receivers to manage the system.
+The RTP config server needs a list of streams to manage the system.
+Servers and receivers are managed dynamically as they appear.
 The configuration is made in yaml format:
 
     # list of radio streams a server can play
@@ -41,23 +42,6 @@ The configuration is made in yaml format:
         uri: http://amsterdam2.shouthost.com.streams.bassdrive.com:8000
       - name: Audio Test
         uri: test
-    # a list of servers to manage
-    servers:
-      - name: Living room
-        host: rsp0
-        port: 48100
-    # a list of static unmanaged servers
-    # e.g. for streaming audio from your pc into the network
-    staticservers:
-      - name: Notebook
-        host: t420
-        port: 48100
-    # a list of receivers who are allowed to connect to any server
-    receivers:
-      - name: Living room
-        host: rsp0
-      - name: Kitchen
-        host: rsp1
 
 # Build
 

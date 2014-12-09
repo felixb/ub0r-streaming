@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -12,7 +13,7 @@ import (
 
 const (
 	retryInterval = 5 * time.Second
-	maxRetry = 24
+	maxRetry      = 24
 )
 
 // ------------ manager
@@ -23,7 +24,7 @@ type Manager struct {
 	ConfigUri  string
 	StaticUri  string
 	State      gst.State
-	Name       string
+	Backend    Pinger
 	RetryCount int
 }
 
@@ -31,6 +32,14 @@ func NewManager() *Manager {
 	m := Manager{}
 	m.ConfigSync = make(chan *Config, 2)
 	return &m
+}
+
+func (m *Manager) Receiver() *Receiver {
+	return m.Backend.(*Receiver)
+}
+
+func (m *Manager) Server() *Server {
+	return m.Backend.(*Server)
 }
 
 func (m *Manager) onMessage(bus *gst.Bus, msg *gst.Message) {
@@ -47,13 +56,13 @@ func (m *Manager) onMessage(bus *gst.Bus, msg *gst.Message) {
 		}
 	case gst.MESSAGE_EOS:
 		log.Info("pipeline: end of stream")
-		m.ConfigSync<-nil
+	m.ConfigSync<-nil
 	case gst.MESSAGE_ERROR:
 		err, debug := msg.ParseError()
 		log.Error("pipeline error: %s (debug: %s)", err, debug)
 		// try to reconnect
 		time.Sleep(retryInterval)
-		m.ConfigSync<-nil
+	m.ConfigSync<-nil
 	case gst.MESSAGE_BUFFERING:
 		// ignore
 	default:
@@ -99,7 +108,7 @@ func addElem(pl *gst.Pipeline, e *gst.Element) bool {
 }
 
 func linkElems(src, sink *gst.Element) bool {
-	r :=  src.Link(sink)
+	r := src.Link(sink)
 	log.Debug("link %s -> %s: %v", src.GetName(), sink.GetName(), r)
 	return r
 }
@@ -117,6 +126,17 @@ func onPadAdded(sinkPad, newPad *gst.Pad) {
 }
 
 // ------------ config stuff
+
+func pingConfig(uri string, obj Pinger) error {
+	log.Debug("register object at path: %s %s", uri)
+
+	j, _ := json.Marshal(obj)
+	req, _ := http.NewRequest("POST", uri, bytes.NewBuffer(j))
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	_, err := client.Do(req)
+	return err
+}
 
 func fetchObject(uri string, wait bool, obj interface{}) (interface{}, error) {
 	var u string
