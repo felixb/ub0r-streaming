@@ -27,18 +27,24 @@ func findServer(backends *Backends, serverName string) *Server {
 	return nil
 }
 
+func setDevice(src *gst.Element, uri string) {
+	if strings.Index(uri, ":") > 0 {
+		parts := strings.SplitN(uri, ":", 2)
+		src.SetProperty("device", parts[1])
+	}
+}
+
 func buildSrc(uri string) *gst.Element {
 	var src *gst.Element
 	if uri == "test" {
 		src = makeElem("audiotestsrc")
 	} else if strings.HasPrefix(uri, "alsa") {
 		src = makeElem("alsasrc")
-		if strings.HasPrefix(uri, "alsa:") {
-			parts := strings.SplitN(uri, ":", 2)
-			src.SetProperty("device", parts[1])
-		}
+		setDevice(src, uri)
 	} else if strings.HasPrefix(uri, "pulse") {
-		// TODO pulse mirror
+		src = makeElem("pulsesrc")
+		setDevice(src, uri)
+		// TODO add filter for stereo
 	} else {
 		src = makeElem("uridecodebin")
 		src.SetProperty("uri", uri)
