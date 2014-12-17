@@ -78,12 +78,12 @@ func loop(m *Manager) {
 			}
 		}
 
-		server := getServer(config, m.Receiver().Name)
+		server := getServer(config, m.Receiver().Host)
 		if server != nil {
 			log.Info("connecting to server: %s:%d", server.Host, server.Port)
 			playPipeline(m, server)
 		} else {
-			log.Info("unable to find suitable server for myself (%s), waiting for new config", m.Receiver().Name)
+			log.Info("unable to find suitable server for myself (%s), waiting for new config", m.Receiver().Host)
 		}
 		// watch state/config changes and restart pipeline
 		var newServer *Server
@@ -98,7 +98,7 @@ func loop(m *Manager) {
 				// state changed start all over
 				break
 			}
-			newServer = getServer(config, m.Receiver().Name)
+			newServer = getServer(config, m.Receiver().Host)
 			// exit loop if server == off
 			if newServer == nil {
 				if i > 0 {

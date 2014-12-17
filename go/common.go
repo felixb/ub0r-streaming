@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha1"
+	"fmt"
 	"os"
 	"time"
 
@@ -33,6 +35,7 @@ type Receiver struct {
 type Config struct {
 	Servers   map[string]*Radio
 	Receivers map[string]*Server
+	Backends  *Backends
 }
 
 type Backends struct {
@@ -55,6 +58,10 @@ func (e *Server) Ping() {
 
 func (e *Receiver) Ping() {
 	e.LastPing = time.Now().Unix()
+}
+
+func (r *Radio) Id() string {
+	return fmt.Sprintf("radio-%x", sha1.Sum([]byte(r.Uri)))
 }
 
 // ----- logging -------------------------------

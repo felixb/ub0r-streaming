@@ -165,12 +165,6 @@ func fetchObject(uri string, wait bool, obj interface{}) (interface{}, error) {
 	return obj, nil
 }
 
-func fetchBackends(base string, wait bool) (*Backends, error) {
-	var backends Backends
-	_, err := fetchObject(base+"/api/backends", wait, &backends)
-	return &backends, err
-}
-
 func fetchConfig(base string, wait bool) (*Config, error) {
 	var config Config
 	_, err := fetchObject(base+"/api/config", wait, &config)

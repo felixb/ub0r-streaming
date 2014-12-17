@@ -5,6 +5,8 @@
     <link rel="stylesheet" href="//ajax.googleapis.com/ajax/libs/jquerymobile/1.4.3/jquery.mobile.min.css"/>
     <script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
     <script src="//ajax.googleapis.com/ajax/libs/jquerymobile/1.4.3/jquery.mobile.min.js"></script>
+    <script src="//crypto-js.googlecode.com/svn/tags/3.1.2/build/rollups/sha1.js"></script>
+    <link rel="stylesheet" href="/static/style.css"/>
     <script src="/static/script.js"></script>
     <title>RTP streaming config</title>
 </head>
@@ -18,6 +20,7 @@
                 <ul>
                     <li><a href="#servers" class="ui-btn-active ui-state-persist">Servers</a></li>
                     <li><a href="#receivers">Receivers</a></li>
+                    <li><a href="#radios">Radios</a></li>
                 </ul>
             </div>
         </div>
@@ -31,6 +34,7 @@
                 <ul>
                     <li><a href="#servers">Servers</a></li>
                     <li><a href="#receivers" class="ui-btn-active ui-state-persist">Receivers</a></li>
+                    <li><a href="#radios">Radios</a></li>
                 </ul>
             </div>
         </div>
@@ -38,5 +42,65 @@
     </div>
     <!-- /page: receivers -->
 
+    <div id="radios" data-role="page">
+        <div data-role="header">
+            <div data-role="navbar">
+                <ul>
+                    <li><a href="#servers">Servers</a></li>
+                    <li><a href="#receivers">Receivers</a></li>
+                    <li><a href="#radios" class="ui-btn-active ui-state-persist">Radios</a></li>
+                </ul>
+            </div>
+        </div>
+        <div role="main" class="ui-content">
+            <ul id="radios-list" class="radio-list-ul" data-role="listview" data-inset="true"></ul>
+            <a href="#" class="dialog-add-radio ui-btn ui-icon-plus ui-btn-icon-right">Add radio</a>
+        </div>
+    </div>
+    <!-- /page: radios -->
+
+    <div id="add-radio" data-role="page" data-dialog="true">
+        <div data-role="header">
+            <h2>Update radio</h2>
+        </div>
+        <div class="ui-content" role="main">
+            <form id="add-radio-form" method="post" action="/api/radio">
+                <label for="add-radio-name">Name:</label>
+                <input type="text" name="Name" id="add-radio-name">
+                <label for="add-radio-uri">Uri:</label>
+                <input type="text" name="Uri" id="add-radio-uri">
+            </form>
+            <div class="ui-grid-a">
+                <div class="ui-block-a">
+                    <a href="#" id="save-button" class="ui-btn ui-btn-b ui-shadow ui-corner-all" onclick="addRadio();">Save</a>
+                </div>
+                <div class="ui-block-b">
+                    <a href="#" id="cancel-button" class="ui-btn ui-shadow ui-corner-all" onclick="$.mobile.back();">Cancel</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- /page: dialog: add-radio -->
+
+    <div id="delete-radio" data-role="page" data-dialog="true">
+        <div data-role="header">
+            <h2>Delete radio</h2>
+        </div>
+        <div class="ui-content" role="main">
+            <p>Do you really want to delete this radio?</p>
+
+            <div class="ui-grid-a">
+                <div class="ui-block-a">
+                    <a href="#" id="delete-radio-button" class="ui-btn ui-shadow ui-corner-all"
+                       onclick="deleteRadio();">Delete</a>
+                </div>
+                <div class="ui-block-b">
+                    <a href="#" id="cancel-radio-button" class="ui-btn ui-shadow ui-corner-all"
+                       onclick="$.mobile.back();">Cancel</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- /page: dialog: delete-radio -->
 </div>
 </body>

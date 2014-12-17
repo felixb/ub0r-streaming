@@ -1,10 +1,10 @@
 .PHONY: all build-all clean dist
 
 all:
-	make -C go
+	make -j3 -C go
 
 build-all:
-	make -C go build-all
+	make -j3 -C go build-all
 
 dist: build-all
 	-rm -r dist

@@ -28,20 +28,16 @@ You'll need at least one receiver.
 
 # Configuration
 
-The RTP config server needs a list of streams to manage the system.
-Servers and receivers are managed dynamically as they appear.
-The configuration is made in yaml format:
+The RTP config server manages a dynamic set of servers and receivers as they appear.
+Radio streams are managed on the web frontend.
 
-    # list of radio streams a server can play
-    radios:
-      - name: off
-        uri: off
-      - name: Line in
-        uri: alsa:hw:1
-      - name: Bass Drive
-        uri: http://amsterdam2.shouthost.com.streams.bassdrive.com:8000
-      - name: Audio Test
-        uri: test
+The following URIs are available as radio stream:
+
+* `off`: turns off a server
+* `alsa:${device}`: plays a alsa input stream
+* `pulse:${device}`: plays a pule audio source
+* `http...`: plays a web stream
+* `test`: plays a sinus test signal
 
 # Build
 

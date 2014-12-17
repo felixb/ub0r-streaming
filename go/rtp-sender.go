@@ -97,14 +97,14 @@ func loop(m *Manager) {
 			playPipeline(m, m.StaticUri, m.Server())
 			config = <-m.ConfigSync
 		} else {
-			radio := getRadio(config, m.Server().Name)
+			radio := getRadio(config, m.Server().Host)
 			if radio != nil && radio.Uri != "off" {
 				log.Info("starting radio: %s", radio.Uri)
 				playPipeline(m, radio.Uri, m.Server())
 			} else if radio != nil && radio.Uri == "off" {
 				log.Info("radio turned off, waiting fo new config")
 			} else {
-				log.Info("unable to find suitable radio for myself (%s), waiting for new config", m.Server().Name)
+				log.Info("unable to find suitable radio for myself (%s), waiting for new config", m.Server().Host)
 			}
 			// watch state/config changes and restart pipeline
 			var newRadio *Radio
@@ -115,7 +115,7 @@ func loop(m *Manager) {
 					// state changed start all over
 					break
 				}
-				newRadio = getRadio(config, m.Server().Name)
+				newRadio = getRadio(config, m.Server().Host)
 				log.Debug("new radio: %s", newRadio)
 			}
 		}
