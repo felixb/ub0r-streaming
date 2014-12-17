@@ -39,4 +39,3 @@ rtp-sender
 # local stuff
 target
 make-on-rsp0.sh
-backends.yaml
