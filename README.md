@@ -39,6 +39,15 @@ The following URIs are available as radio stream:
 * `http...`: plays a web stream
 * `test`: plays a sinus test signal
 
+# Screenshots
+
+The RTP config server has a ub0r web UI.
+It's responsive designed and uses bleeding edge web techniques:
+
+![Servers][screen_server]
+![Receivers][screen_receiver]
+![Radios][screen_radios]
+
 # Build
 
 The simplest way is using make.
@@ -73,3 +82,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+[screen_server]: https://raw.githubusercontent.com/felixb/ub0r-streaming/master/assets/screen_server_small.png "Screenshot: Servers"
+[screen_receiver]: https://raw.githubusercontent.com/felixb/ub0r-streaming/master/assets/screen_receiver_small.png "Screenshot: Receivers"
+[screen_radios]: https://raw.githubusercontent.com/felixb/ub0r-streaming/master/assets/screen_radios_small.png "Screenshot: Radios"
