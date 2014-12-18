@@ -48,6 +48,14 @@ It's responsive designed and uses bleeding edge web techniques:
 ![Receivers][screen_receiver]
 ![Radios][screen_radios]
 
+# Dependencies for running
+
+You need gstreamer 1.0 including some plugins to run ub0r streaming.
+
+On debian/ubuntu:
+
+    apt-get install gstreamer1.0-alsa gstreamer1.0-pulseaudio gstreamer1.0-plugins-good gstreamer1.0-plugins-bad
+
 # Build
 
 The simplest way is using make.
