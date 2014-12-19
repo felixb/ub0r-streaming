@@ -172,14 +172,23 @@ func fetchConfig(base string, wait bool) (*Config, error) {
 }
 
 func watchConfig(m *Manager) {
+	backOff := time.Second
 	for true {
 		config, _ := fetchConfig(m.ConfigUri, true)
 		log.Debug("got new config: %s", config)
 		if config != nil {
 			// send new config to pipeline
 			m.ConfigSync<-config
+			// reset back off
+			backOff = time.Second
 		} else {
-			time.Sleep(2 * time.Second)
+			time.Sleep(backOff)
+			// exponential back off, max = 1h
+			if backOff < time.Hour {
+				backOff *= 2
+			} else {
+				backOff = time.Hour
+			}
 		}
 	}
 }
