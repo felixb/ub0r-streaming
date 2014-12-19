@@ -159,10 +159,7 @@ function injectBackends() {
     });
     $('.dialog-add-radio').click(function(e) {
         e.preventDefault();
-        editRadioId = null;
-        $("#add-radio-name").val("");
-        $("#add-radio-uri").val("");
-        $.mobile.changePage('#add-radio');
+        showAddRadioDialog();
     });
     $('form#add-radio-form').submit(function(e) {
         addRadio();
@@ -201,11 +198,24 @@ function watchConfig() {
     };
 }
 
+function showAddRadioDialog(id) {
+    editRadioId = null;
+    $("#add-radio-name").val("");
+    $("#add-radio-uri").val("");
+    $.mobile.changePage('#add-radio');
+    setTimeout(function(){
+        $('#add-radio-name').focus();
+    },200);
+}
+
 function showEditRadioDialog(id) {
     editRadioId = id;
     $("#add-radio-name").val(config.Backends.RadiosByKey[id].Name);
     $("#add-radio-uri").val(config.Backends.RadiosByKey[id].Uri);
     $.mobile.changePage('#add-radio');
+    setTimeout(function(){
+        $('#add-radio-name').focus();
+    },200);
 }
 
 function showDeleteRadioDialog(id) {
