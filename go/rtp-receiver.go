@@ -62,6 +62,7 @@ func playPipeline(m *Manager, server *Server) {
 		m.RetryCount += 1
 		time.Sleep(retryInterval)
 		m.ConfigSync<-nil
+		m.RetryCount = 0
 	}
 }
 
