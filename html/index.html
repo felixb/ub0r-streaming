@@ -73,15 +73,15 @@
                 <input type="text" name="Name" id="add-radio-name">
                 <label for="add-radio-uri">Uri:</label>
                 <input type="text" name="Uri" id="add-radio-uri">
+                <div class="ui-grid-a">
+                    <div class="ui-block-a">
+                        <input type="submit" id="save-button" class="ui-btn ui-btn-b ui-shadow ui-corner-all" value="Save">
+                    </div>
+                    <div class="ui-block-b">
+                        <a href="#" id="cancel-button" class="ui-btn ui-shadow ui-corner-all" onclick="$.mobile.back();">Cancel</a>
+                    </div>
+                </div>
             </form>
-            <div class="ui-grid-a">
-                <div class="ui-block-a">
-                    <a href="#" id="save-button" class="ui-btn ui-btn-b ui-shadow ui-corner-all" onclick="addRadio();">Save</a>
-                </div>
-                <div class="ui-block-b">
-                    <a href="#" id="cancel-button" class="ui-btn ui-shadow ui-corner-all" onclick="$.mobile.back();">Cancel</a>
-                </div>
-            </div>
         </div>
     </div>
     <!-- /page: dialog: add-radio -->
@@ -93,16 +93,17 @@
         <div class="ui-content" role="main">
             <p>Do you really want to delete this radio?</p>
 
-            <div class="ui-grid-a">
-                <div class="ui-block-a">
-                    <a href="#" id="delete-radio-button" class="ui-btn ui-shadow ui-corner-all"
-                       onclick="deleteRadio();">Delete</a>
+            <form id="delete-radio-form" method="delete" action="/api/radio">
+                <div class="ui-grid-a">
+                    <div class="ui-block-a">
+                        <input type="submit" id="delete-radio-button" class="ui-btn ui-shadow ui-corner-all" value="Delete">
+                    </div>
+                    <div class="ui-block-b">
+                        <a href="#" id="cancel-radio-button" class="ui-btn ui-shadow ui-corner-all"
+                           onclick="$.mobile.back();">Cancel</a>
+                    </div>
                 </div>
-                <div class="ui-block-b">
-                    <a href="#" id="cancel-radio-button" class="ui-btn ui-shadow ui-corner-all"
-                       onclick="$.mobile.back();">Cancel</a>
-                </div>
-            </div>
+            </form>
         </div>
     </div>
     <!-- /page: dialog: delete-radio -->

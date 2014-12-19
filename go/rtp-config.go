@@ -319,7 +319,7 @@ func serveJson(w http.ResponseWriter, req *http.Request, obj interface{}) {
 }
 
 func serve(w http.ResponseWriter, req *http.Request) {
-	log.Debug("serve: %s", req.URL.Path)
+	log.Debug("serve: %s %s", req.Method, req.URL.Path)
 
 	if req.URL.Path == "/" {
 		localPath := *staticDir + "/index.html"
@@ -439,7 +439,7 @@ func main() {
 	verbose := flag.Bool("verbose", false, "verbose logging")
 	flag.Parse()
 	initLogger(*verbose)
-	
+
 	log.Info("starting")
 	locker := &sync.Mutex{}
 	configCond = sync.NewCond(locker)

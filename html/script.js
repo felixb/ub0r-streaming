@@ -145,26 +145,42 @@ function injectBackends() {
     $('.radio-list-ul').listview().listview('refresh');
 
     // replace api-calls with ajax requests
-    $('.api-call').click(function(e) {
-       e.preventDefault();
-       $.get(e.target.href);
-    });
-    $('.dialog-edit-radio').click(function(e) {
-       e.preventDefault();
-       showEditRadioDialog(e.target.rel);
-    });
-    $('.dialog-delete-radio').click(function(e) {
-       e.preventDefault();
-       showDeleteRadioDialog(e.target.rel);
-    });
-    $('.dialog-add-radio').click(function(e) {
-        e.preventDefault();
-        showAddRadioDialog();
-    });
-    $('form#add-radio-form').submit(function(e) {
-        addRadio();
-        return false;
-    });
+    $('.api-call').unbind('click', onApiCallClick);
+    $('.api-call').click(onApiCallClick);
+    $('.dialog-edit-radio').unbind('click', onEditRadioClick);
+    $('.dialog-edit-radio').click(onEditRadioClick);
+    $('.dialog-delete-radio').unbind('click', onDeleteRadioClick);
+    $('.dialog-delete-radio').click(onDeleteRadioClick);
+}
+
+function onApiCallClick(e) {
+   e.preventDefault();
+   $.get(e.target.href);
+}
+
+function onAddRadioClick(e) {
+    e.preventDefault();
+    showEditRadioDialog(null);
+}
+
+function onEditRadioClick(e) {
+   e.preventDefault();
+   showEditRadioDialog(e.target.rel);
+}
+
+function onDeleteRadioClick(e) {
+   e.preventDefault();
+   showDeleteRadioDialog(e.target.rel);
+}
+
+function onAddRadioSubmit(e) {
+    e.preventDefault();
+    addRadio();
+}
+
+function onDeleteRadioSubmit(e) {
+    e.preventDefault();
+    deleteRadio();
 }
 
 // callback to update config
@@ -198,20 +214,17 @@ function watchConfig() {
     };
 }
 
-function showAddRadioDialog(id) {
-    editRadioId = null;
-    $("#add-radio-name").val("");
-    $("#add-radio-uri").val("");
-    $.mobile.changePage('#add-radio');
-    setTimeout(function(){
-        $('#add-radio-name').focus();
-    },200);
-}
-
 function showEditRadioDialog(id) {
     editRadioId = id;
-    $("#add-radio-name").val(config.Backends.RadiosByKey[id].Name);
-    $("#add-radio-uri").val(config.Backends.RadiosByKey[id].Uri);
+    if (id) {
+        $("#add-radio-name").val(config.Backends.RadiosByKey[id].Name);
+        $("#add-radio-uri").val(config.Backends.RadiosByKey[id].Uri);
+    } else {
+        $("#add-radio-name").val("");
+        $("#add-radio-uri").val("");
+    }
+    $('#add-radio-name').toggleClass('error', false);
+    $('#add-radio-uri').toggleClass('error', false);
     $.mobile.changePage('#add-radio');
     setTimeout(function(){
         $('#add-radio-name').focus();
@@ -221,6 +234,9 @@ function showEditRadioDialog(id) {
 function showDeleteRadioDialog(id) {
     deleteRadioId = id;
     $.mobile.changePage('#delete-radio');
+    setTimeout(function(){
+        $('#delete-radio-button').focus();
+    },200);
 }
 
 function addRadio() {
@@ -251,4 +267,11 @@ function deleteRadio() {
 $(document).ready(function() {
     fetchConfig();
     watchConfig();
+
+    $('.dialog-add-radio').unbind('click', onAddRadioClick);
+    $('.dialog-add-radio').click(onAddRadioClick);
+    $('form#add-radio-form').unbind('submit', onAddRadioSubmit);
+    $('form#add-radio-form').submit(onAddRadioSubmit);
+    $('form#delete-radio-form').unbind('submit', onDeleteRadioSubmit);
+    $('form#delete-radio-form').submit(onDeleteRadioSubmit);
 });
