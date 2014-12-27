@@ -6,9 +6,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/ziutek/gst"
+	"code.google.com/p/go.net/websocket"
 )
 
 const (
@@ -128,7 +130,7 @@ func onPadAdded(sinkPad, newPad *gst.Pad) {
 // ------------ config stuff
 
 func pingConfig(uri string, obj Pinger) error {
-	log.Debug("register object at path: %s %s", uri)
+	log.Debug("register object at path: %s", uri)
 
 	j, _ := json.Marshal(obj)
 	req, _ := http.NewRequest("POST", uri, bytes.NewBuffer(j))
@@ -138,15 +140,9 @@ func pingConfig(uri string, obj Pinger) error {
 	return err
 }
 
-func fetchObject(uri string, wait bool, obj interface{}) (interface{}, error) {
-	var u string
-	if wait {
-		u = uri+"?wait"
-	} else {
-		u = uri
-	}
-	log.Debug("fetch object: %s", u)
-	resp, err := http.Get(u)
+func fetchObject(uri string, obj interface{}) (interface{}, error) {
+	log.Debug("fetch object: %s", uri)
+	resp, err := http.Get(uri)
 	if err != nil {
 		return nil, err
 	}
@@ -165,23 +161,73 @@ func fetchObject(uri string, wait bool, obj interface{}) (interface{}, error) {
 	return obj, nil
 }
 
-func fetchConfig(base string, wait bool) (*Config, error) {
+func fetchConfig(base string) (*Config, error) {
 	var config Config
-	_, err := fetchObject(base+"/api/config", wait, &config)
+	_, err := fetchObject(base+"/api/config", &config)
 	return &config, err
+}
+
+func readBlob(ws *websocket.Conn) ([]byte, error) {
+	buf := make([]byte, 0)
+
+	for true {
+		msg := make([]byte, 2048)
+		var n int
+		var err error
+		if n, err = ws.Read(msg); err != nil {
+			return nil, err
+		}
+		log.Debug("Received %db: %s", n, msg[:n])
+		buf = append(buf, msg[:n]...)
+
+		if len(msg) > n {
+			return buf, nil
+		}
+	}
+
+	// should never happen
+	return nil, nil
+}
+
+func readConfig(m *Manager, ws *websocket.Conn) error {
+	buf, err := readBlob(ws)
+	if err != nil {
+		return err
+	}
+
+	var config Config
+	err = json.Unmarshal(buf, &config)
+	if err != nil {
+		return err
+	}
+
+	// send new config to pipeline
+	log.Debug("got new config: %s", config)
+	m.ConfigSync<-&config
+	return nil
+}
+
+func readConfigs(m *Manager, ws *websocket.Conn) {
+	defer ws.Close()
+	// read from websocket
+	for true {
+		err := readConfig(m, ws)
+		if err != nil {
+			log.Error("error reading config: %s", err)
+			return
+		}
+	}
 }
 
 func watchConfig(m *Manager) {
 	backOff := time.Second
+
 	for true {
-		config, _ := fetchConfig(m.ConfigUri, true)
-		log.Debug("got new config: %s", config)
-		if config != nil {
-			// send new config to pipeline
-			m.ConfigSync<-config
-			// reset back off
-			backOff = time.Second
-		} else {
+		origin := m.ConfigUri
+		url := strings.Replace(m.ConfigUri, "http", "ws", 1) + "/ws/config"
+		ws, err := websocket.Dial(url, "", origin)
+		if err != nil {
+			log.Error("unable to reach config server: %s", err)
 			time.Sleep(backOff)
 			// exponential back off, max = 1h
 			if backOff < time.Hour {
@@ -189,6 +235,10 @@ func watchConfig(m *Manager) {
 			} else {
 				backOff = time.Hour
 			}
+		} else {
+			// reset back off
+			backOff = time.Second
+			readConfigs(m, ws)
 		}
 	}
 }

@@ -72,7 +72,7 @@ func loop(m *Manager) {
 	for true {
 		log.Debug("starting new pipeline")
 		if config == nil {
-			config, err = fetchConfig(m.ConfigUri, false)
+			config, err = fetchConfig(m.ConfigUri)
 			if err != nil {
 				log.Error("error fetching config: %s", err)
 				os.Exit(1)

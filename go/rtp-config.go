@@ -297,16 +297,6 @@ func serveApiReceiver(w http.ResponseWriter, req *http.Request) {
 }
 
 func serveJson(w http.ResponseWriter, req *http.Request, obj interface{}) {
-	wait := req.URL.RawQuery == "wait"
-
-	if wait {
-		// wait for change config trigger
-		log.Debug("Wait for configCond: %s", configCond)
-		configCond.L.Lock()
-		configCond.Wait()
-		configCond.L.Unlock()
-	}
-
 	b, err := json.Marshal(obj)
 	if err != nil {
 		msg := fmt.Sprintf("error writing json: %v", err)
