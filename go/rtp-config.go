@@ -26,6 +26,19 @@ var (
 	staticDir *string
 )
 
+// Locking -----------------------------------------
+
+func waitForNewConfig() {
+	log.Debug("Wait for configCond: %s", configCond)
+	configCond.L.Lock()
+	configCond.Wait()
+	configCond.L.Unlock()
+}
+
+func notifyNewConfig() {
+	configCond.Broadcast()
+}
+
 // HTTP --------------------------------------------
 
 // WebSocket /ws/config
@@ -33,11 +46,7 @@ func serveWsConfig(ws *websocket.Conn) {
 	log.Info("serve: /ws/config")
 
 	for true {
-		log.Debug("Wait for configCond: %s", configCond)
-		configCond.L.Lock()
-		configCond.Wait()
-		configCond.L.Unlock()
-
+		waitForNewConfig()
 		b, err := json.Marshal(config)
 		if err != nil {
 			msg := fmt.Sprintf("error writing json: %v", err)
@@ -173,11 +182,11 @@ func serveApiRadio(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		addRadio(id, o)
-		configCond.Broadcast()
+		notifyNewConfig()
 		serveJson(w, req, o)
 	} else if req.Method == "DELETE" {
 		if rmRadio(id) {
-			configCond.Broadcast()
+			notifyNewConfig()
 			serveJson(w, req, nil)
 		} else {
 			http.NotFound(w, req)
@@ -227,7 +236,7 @@ func serveApiServer(w http.ResponseWriter, req *http.Request) {
 		if config.Backends.Servers[i].Host == serverName {
 			log.Debug("setting new radio for %s: %s", serverName, radio)
 			config.Servers[serverName] = radio
-			configCond.Broadcast()
+			notifyNewConfig()
 			return
 		}
 	}
@@ -286,7 +295,7 @@ func serveApiReceiver(w http.ResponseWriter, req *http.Request) {
 		if r.Host == receiverName {
 			log.Debug("setting new server for %s: %s", receiverName, server)
 			config.Receivers[receiverName] = server
-			configCond.Broadcast()
+			notifyNewConfig()
 			return
 		}
 	}
@@ -382,9 +391,7 @@ func saveConfigCache(configFile *string) {
 
 func scheduleSaveConfigCache(configFile *string) {
 	for true {
-		configCond.L.Lock()
-		configCond.Wait()
-		configCond.L.Unlock()
+		waitForNewConfig()
 		saveConfigCache(configFile)
 	}
 }
