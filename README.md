@@ -14,14 +14,14 @@ You'll need one config server.
 
 ## RTP sender
 
-The server encodes a web radio stream or line in into a opus+ogg stream and provides this compressed stream as a TCP server to the local network.
+The sender encodes a web radio stream or line in into a opus+ogg stream and provides this compressed stream as a TCP server to the local network.
 It's basically a thin layer around gstreamer.
 
-You'll need at least one sender.
+You can run a stand alone server on any device or let the RTP config server spawn them in the background.
 
 ## RTP receiver
 
-The sender is an even thinner layer around gstreamer.
+The receiver is an even thinner layer around gstreamer.
 It connects to one of the sender components to decode and play the compressed audio stream.
 
 You'll need at least one receiver.
@@ -44,7 +44,6 @@ The following URIs are available as radio stream:
 The RTP config server has a ub0r web UI.
 It's responsive designed and uses bleeding edge web techniques:
 
-![Servers][screen_server]
 ![Receivers][screen_receiver]
 ![Radios][screen_radios]
 
