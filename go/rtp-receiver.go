@@ -11,8 +11,17 @@ import (
 	"github.com/ziutek/gst"
 )
 
-func getServer(config *Config, receiverName string) *Server {
-	return config.Receivers[receiverName]
+func (m *Manager) getServer(config *Config) *Server {
+	id, ok := config.Receivers[m.Receiver().Id()]
+	if ok {
+		s, ok := config.Backends.Servers[id]
+		if ok {
+			return s
+		} else {
+			return config.Backends.StaticServers[id]
+		}
+	}
+	return nil
 }
 
 func checkServer(server *Server) bool {
@@ -79,7 +88,7 @@ func loop(m *Manager) {
 			}
 		}
 
-		server := getServer(config, m.Receiver().Host)
+		server := m.getServer(config)
 		if server != nil {
 			log.Info("connecting to server: %s:%d", server.Host, server.Port)
 			playPipeline(m, server)
@@ -98,7 +107,7 @@ func loop(m *Manager) {
 				// state changed start all over
 				break
 			}
-			newServer = getServer(config, m.Receiver().Host)
+			newServer = m.getServer(config)
 			// exit loop if server == off
 			if newServer == nil {
 				if i > 0 {

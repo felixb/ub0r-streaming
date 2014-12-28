@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -37,6 +36,61 @@ func waitForNewConfig() {
 
 func notifyNewConfig() {
 	configCond.Broadcast()
+}
+
+// Errors ------------------------------------------
+
+type ServeError struct {
+	Message      string
+	ResponseCode int
+}
+
+func NewError(msg string, rc int) *ServeError {
+	return &ServeError{msg, rc}
+}
+
+func NewInternalError(msg string) *ServeError {
+	return &ServeError{msg, http.StatusInternalServerError}
+}
+
+func (e *ServeError) Error() string {
+	return e.Message
+}
+
+// Interfaces --------------------------------------
+
+func NewBackends() *Backends {
+	b := &Backends{}
+	b.Radios = make(map[string]*Radio)
+	b.Servers = make(map[string]*Server)
+	b.StaticServers = make(map[string]*Server)
+	b.Receivers = make(map[string]*Receiver)
+	return b
+}
+
+func (b *Backends) addReceiver(o *Receiver) {
+	b.Receivers[o.Id()] = o
+}
+
+func (b *Backends) addServer(o *Server) {
+	b.Servers[o.Id()] = o
+}
+
+func (b *Backends) addStatic(o *Server) {
+	b.StaticServers[o.Id()] = o
+}
+
+func (b *Backends) addRadio(o *Radio) {
+	b.Radios[o.Id()] = o
+}
+
+func (b *Backends) rmRadio(id string) bool {
+	if _, ok := b.Radios[id]; ok {
+		delete(b.Radios, id)
+		return true
+	} else {
+		return false
+	}
 }
 
 // HTTP --------------------------------------------
@@ -87,254 +141,142 @@ func unmarshalRadio(req *http.Request) (*Radio, error) {
 	return &o, nil
 }
 
-func addReceiver(o *Receiver) {
-	log.Debug("receiver: %s", *o)
-	for i, oo := range config.Backends.Receivers {
-		if oo.Host == o.Host {
-			config.Backends.Receivers[i] = o
-			return
-		}
-	}
-	config.Backends.Receivers = append(config.Backends.Receivers, o)
-}
-
-func addServer(o *Server) {
-	for i, oo := range config.Backends.Servers {
-		if oo.Host == o.Host {
-			config.Backends.Servers[i] = o
-			return
-		}
-	}
-	config.Backends.Servers = append(config.Backends.Servers, o)
-}
-
-func addStatic(o *Server) {
-	for i, oo := range config.Backends.StaticServers {
-		if oo.Host == o.Host {
-			config.Backends.StaticServers[i] = o
-			return
-		}
-	}
-	config.Backends.StaticServers = append(config.Backends.StaticServers, o)
-}
-
-func addRadio(id string, o *Radio) {
-	for i, oo := range config.Backends.Radios {
-		if oo.Id() == id {
-			config.Backends.Radios[i] = o
-			return
-		}
-	}
-	config.Backends.Radios = append(config.Backends.Radios, o)
-}
-
-func rmRadio(id string) bool {
-	for i, oo := range config.Backends.Radios {
-		if oo.Id() == id {
-			config.Backends.Radios = append(config.Backends.Radios[:i], config.Backends.Radios[i+1:]...)
-			return true
-		}
-	}
-	return false
-}
-
 // POST /api/ping
-func serveApiPing(w http.ResponseWriter, req *http.Request) {
+func serveApiPing(w http.ResponseWriter, req *http.Request) *ServeError {
 	if req.URL.Path == "/api/ping/receiver" {
 		o, err := unmarshalReceiver(req)
 		if o != nil && err == nil {
-			addReceiver(o)
+			config.Backends.addReceiver(o)
 			o.Ping()
+			return nil
 		} else {
-			log.Error("somthing went wrong parsing body: %s", err)
+			return NewInternalError(fmt.Sprintf("somthing went wrong parsing body: %s", err))
 		}
 	} else if req.URL.Path == "/api/ping/server" {
 		o, err := unmarshalServer(req)
 		if o != nil && err == nil {
-			addServer(o)
+			config.Backends.addServer(o)
 			o.Ping()
+			return nil
 		} else {
-			log.Error("somthing went wrong parsing body: %s", err)
+			return NewInternalError(fmt.Sprintf("somthing went wrong parsing body: %s", err))
 		}
 	} else if req.URL.Path == "/api/ping/static" {
 		o, err := unmarshalServer(req)
 		if o != nil && err == nil {
-			addStatic(o)
+			config.Backends.addStatic(o)
 			o.Ping()
+			return nil
 		} else {
-			log.Error("somthing went wrong parsing body: %s", err)
+			return NewInternalError(fmt.Sprintf("somthing went wrong parsing body: %s", err))
 		}
 	} else {
-		log.Error("unknown path: %s", req.URL.Path)
+		return NewInternalError(fmt.Sprintf("unknown path: %s", req.URL.Path))
 	}
 }
 
 // POST /api/radio
-func serveApiRadio(w http.ResponseWriter, req *http.Request) {
+func serveApiRadio(w http.ResponseWriter, req *http.Request) *ServeError {
 	id := req.URL.Query().Get("id")
 	log.Debug("/api/radio id: %s", id)
 	if req.Method == "POST" {
 		o, err := unmarshalRadio(req)
 		if o == nil || err != nil {
-			msg := fmt.Sprintf("somthing went wrong parsing body: %s", err)
-			log.Error(msg)
-			http.Error(w, msg, http.StatusInternalServerError)
-			return
+			return NewInternalError(fmt.Sprintf("somthing went wrong parsing body: %s", err))
 		}
-		addRadio(id, o)
+		config.Backends.addRadio(o)
 		notifyNewConfig()
 		serveJson(w, req, o)
 	} else if req.Method == "DELETE" {
-		if rmRadio(id) {
+		if config.Backends.rmRadio(id) {
 			notifyNewConfig()
 			serveJson(w, req, nil)
 		} else {
-			http.NotFound(w, req)
+			return NewError("radio not found", http.StatusNotFound)
 		}
 	} else {
-		msg := fmt.Sprintf("unknown path: %s", req.URL.Path)
-		log.Error(msg)
-		http.Error(w, msg, http.StatusInternalServerError)
+		return NewInternalError(fmt.Sprintf("unknown path: %s", req.URL.Path))
 	}
+	return nil
 }
 
-// GET /api/server/${server-name}/radio/${radio-id}
-func serveApiServer(w http.ResponseWriter, req *http.Request) {
-	parts := strings.Split(req.URL.Path, "/")
-	if len(parts) != 6 {
-		msg := fmt.Sprintf("invalid path: %s", req.URL.Path)
-		log.Error(msg)
-		http.Error(w, msg, http.StatusInternalServerError)
-		return
+// GET /api/server?server=${server-id}&radio=${radio-id}
+func serveApiServer(w http.ResponseWriter, req *http.Request) *ServeError {
+	server_id := req.URL.Query().Get("server")
+	radio_id := req.URL.Query().Get("radio")
+	log.Debug("/api/server server: %s, radio: %s", server_id, radio_id)
+
+	if !config.Backends.hasServer(server_id) && !config.Backends.hasStaticServer(server_id) {
+		return NewInternalError(fmt.Sprintf("server not found: %s", server_id))
 	}
 
-	serverName := parts[3]
-	radioId, err := strconv.Atoi(parts[5])
-	var radio *Radio
-	if err != nil {
-		msg := fmt.Sprintf("error parsing radio id: %s", parts[2])
-		log.Error(msg)
-		http.Error(w, msg, http.StatusInternalServerError)
-		return
-	}
-	if parts[4] != "radio" {
-		msg := fmt.Sprintf("invalid path: %s", req.URL.Path)
-		log.Error(msg)
-		http.Error(w, msg, http.StatusInternalServerError)
-		return
+	if !config.Backends.hasRadio(radio_id) {
+		return NewInternalError(fmt.Sprintf("radio not found: %s", radio_id))
 	}
 
-	if radioId < 0 || radioId >= len(config.Backends.Radios) {
-		msg := fmt.Sprintf("invalid radio id: %d", radioId)
-		log.Error(msg)
-		http.Error(w, msg, http.StatusInternalServerError)
-		return
-	}
-	radio = config.Backends.Radios[radioId]
-
-	for i := range config.Backends.Servers {
-		if config.Backends.Servers[i].Host == serverName {
-			log.Debug("setting new radio for %s: %s", serverName, radio)
-			config.Servers[serverName] = radio
-			notifyNewConfig()
-			return
-		}
-	}
-
-	msg := fmt.Sprintf("receiver not found: %s", serverName)
-	log.Error(msg)
-	http.Error(w, msg, http.StatusInternalServerError)
+	log.Debug("setting new radio for %s: %s", server_id, radio_id)
+	config.Servers[server_id] = radio_id
+	notifyNewConfig()
+	return nil
 }
 
-// GET /api/receiver/${receiver-name}/{server,static}/${server-id}
-func serveApiReceiver(w http.ResponseWriter, req *http.Request) {
-	parts := strings.Split(req.URL.Path, "/")
-	if len(parts) != 6 {
-		msg := fmt.Sprintf("invalid path: %s", req.URL.Path)
-		log.Error(msg)
-		http.Error(w, msg, http.StatusInternalServerError)
-		return
+// GET /api/receiver?receiver=${receiver-id}&server=${server-id}
+func serveApiReceiver(w http.ResponseWriter, req *http.Request) *ServeError {
+	receiver_id := req.URL.Query().Get("receiver")
+	server_id := req.URL.Query().Get("server")
+	log.Debug("/api/receiver receiver: %s, server: %s", receiver_id, server_id)
+
+	if !config.Backends.hasReceiver(receiver_id) {
+		return NewInternalError(fmt.Sprintf("receiver not found: %s", receiver_id))
 	}
 
-	receiverName := parts[3]
-	serverId, err := strconv.Atoi(parts[5])
-	var server *Server
-	if err != nil {
-		msg := fmt.Sprintf("error parsing server id: %s", parts[2])
-		log.Error(msg)
-		http.Error(w, msg, http.StatusInternalServerError)
-		return
-	}
-	if parts[4] == "server" {
-		if serverId < 0 || serverId >= len(config.Backends.Servers) {
-			msg := fmt.Sprintf("invalid server id: %d", serverId)
-			log.Error(msg)
-			http.Error(w, msg, http.StatusInternalServerError)
-			return
-		}
-		server = config.Backends.Servers[serverId]
-	} else if parts[4] == "static" {
-		if serverId < 0 || serverId >= len(config.Backends.StaticServers) {
-			msg := fmt.Sprintf("invalid server id: %d", serverId)
-			log.Error(msg)
-			http.Error(w, msg, http.StatusInternalServerError)
-			return
-		}
-		server = config.Backends.StaticServers[serverId]
-	} else if parts[4] == "off" {
-		server = nil
-	} else {
-		msg := fmt.Sprintf("invalid path: %s", req.URL.Path)
-		log.Error(msg)
-		http.Error(w, msg, http.StatusInternalServerError)
-		return
-	}
-
-	for i := range config.Backends.Receivers {
-		r := *config.Backends.Receivers[i]
-		if r.Host == receiverName {
-			log.Debug("setting new server for %s: %s", receiverName, server)
-			config.Receivers[receiverName] = server
-			notifyNewConfig()
-			return
+	if server_id != "off" {
+		if !config.Backends.hasServer(server_id) && !config.Backends.hasStaticServer(server_id) {
+			return NewInternalError(fmt.Sprintf("server not found: %s", server_id))
 		}
 	}
 
-	msg := fmt.Sprintf("receiver not found: %s", receiverName)
-	log.Error(msg)
-	http.Error(w, msg, http.StatusInternalServerError)
+	log.Debug("setting new server for %s: %s", receiver_id, server_id)
+	config.Receivers[receiver_id] = server_id
+	notifyNewConfig()
+	return nil
 }
 
-func serveJson(w http.ResponseWriter, req *http.Request, obj interface{}) {
+func serveJson(w http.ResponseWriter, req *http.Request, obj interface{}) *ServeError {
 	b, err := json.Marshal(obj)
 	if err != nil {
-		msg := fmt.Sprintf("error writing json: %v", err)
-		log.Error(msg)
-		http.Error(w, msg, http.StatusInternalServerError)
+		return NewInternalError(fmt.Sprintf("error writing json: %v", err))
 	} else {
 		w.Header().Add("Content-Type", "application/json")
 		w.Write(b)
+		return nil
 	}
 }
 
 func serve(w http.ResponseWriter, req *http.Request) {
 	log.Debug("serve: %s %s", req.Method, req.URL.Path)
 
+	var err *ServeError
 	if req.URL.Path == "/" {
 		localPath := *staticDir + "/index.html"
 		http.ServeFile(w, req, localPath)
 	} else if req.Method == "POST" && strings.HasPrefix(req.URL.Path, "/api/ping") {
-		serveApiPing(w, req)
+		err = serveApiPing(w, req)
 	} else if (req.Method == "POST" || req.Method == "DELETE") && req.URL.Path == "/api/radio" {
-		serveApiRadio(w, req)
+		err = serveApiRadio(w, req)
 	} else if req.URL.Path == "/api/config" {
-		serveJson(w, req, config)
-	} else if strings.HasPrefix(req.URL.Path, "/api/server/") {
-		serveApiServer(w, req)
-	} else if strings.HasPrefix(req.URL.Path, "/api/receiver/") {
-		serveApiReceiver(w, req)
+		err = serveJson(w, req, config)
+	} else if req.URL.Path == "/api/server/" {
+		err = serveApiServer(w, req)
+	} else if req.URL.Path == "/api/receiver/" {
+		err = serveApiReceiver(w, req)
 	} else {
 		http.NotFound(w, req)
+	}
+
+	if err != nil {
+		log.Error(err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
@@ -364,13 +306,11 @@ func loadConfigCache(configFile *string) {
 		log.Debug("config: %s", config)
 	} else {
 		log.Info("create initial config")
-		config.Servers = make(map[string]*Radio)
-		config.Receivers = make(map[string]*Server)
-		config.Backends = &Backends{}
-		config.Backends.Radios = []*Radio{&Radio{"Off", "off"}, &Radio{"Test", "test"}}
-		config.Backends.Servers = []*Server{}
-		config.Backends.StaticServers = []*Server{}
-		config.Backends.Receivers = []*Receiver{}
+		config.Servers = make(map[string]string)
+		config.Receivers = make(map[string]string)
+		config.Backends = NewBackends()
+		config.Backends.addRadio(&Radio{"Off", "off"})
+		config.Backends.addRadio(&Radio{"Test", "test"})
 	}
 }
 
@@ -401,27 +341,22 @@ func scheduleBackendTimeout(c <-chan time.Time) {
 		now := t.Unix()
 		threshold := now - int64(backendTimeout / time.Second)
 
-		for i := len(config.Backends.Receivers) - 1; i >= 0 ; i-- {
-			o := config.Backends.Receivers[i]
+		for k, o := range config.Backends.Receivers {
 			if o.LastPing < threshold {
-				log.Info("remove possibly dead receiver: %s", o.Host)
-				config.Backends.Receivers = append(config.Backends.Receivers[:i], config.Backends.Receivers[i+1:]...)
+				log.Info("remove possibly dead receiver: %s", o.Id())
+				delete(config.Backends.Receivers, k)
 			}
 		}
-
-		for i := len(config.Backends.Servers) - 1; i >= 0 ; i-- {
-			o := config.Backends.Servers[i]
+		for k, o := range config.Backends.Servers {
 			if o.LastPing < threshold {
-				log.Info("remove possibly dead server: %s", o.Host)
-				config.Backends.Servers = append(config.Backends.Servers[:i], config.Backends.Servers[i+1:]...)
+				log.Info("remove possibly dead server: %s", o.Id())
+				delete(config.Backends.Servers, k)
 			}
 		}
-
-		for i := len(config.Backends.StaticServers) - 1; i >= 0 ; i-- {
-			o := config.Backends.StaticServers[i]
+		for k, o := range config.Backends.StaticServers {
 			if o.LastPing < threshold {
-				log.Info("remove possibly dead static server: %s", o.Host)
-				config.Backends.StaticServers = append(config.Backends.StaticServers[:i], config.Backends.StaticServers[i+1:]...)
+				log.Info("remove possibly dead static server: %s", o.Id())
+				delete(config.Backends.StaticServers, k)
 			}
 		}
 	}

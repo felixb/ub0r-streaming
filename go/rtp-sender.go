@@ -10,8 +10,12 @@ import (
 	"github.com/ziutek/gst"
 )
 
-func getRadio(config *Config, serverName string) *Radio {
-	return config.Servers[serverName]
+func (m *Manager) getRadio(config *Config) *Radio {
+	id, ok := config.Servers[m.Server().Id()]
+	if ok {
+		return config.Backends.Radios[id]
+	}
+	return nil
 }
 
 func setDevice(src *gst.Element, uri string) {
@@ -97,7 +101,7 @@ func loop(m *Manager) {
 			playPipeline(m, m.StaticUri, m.Server())
 			config = m.WaitForNewConfig()
 		} else {
-			radio := getRadio(config, m.Server().Host)
+			radio := m.getRadio(config)
 			if radio != nil && radio.Uri != "off" {
 				log.Info("starting radio: %s", radio.Uri)
 				playPipeline(m, radio.Uri, m.Server())
@@ -114,7 +118,7 @@ func loop(m *Manager) {
 					// state changed start all over
 					break
 				}
-				newRadio = getRadio(config, m.Server().Host)
+				newRadio = m.getRadio(config)
 				log.Debug("new radio: %s", newRadio)
 			}
 		}

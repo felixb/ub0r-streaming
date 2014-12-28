@@ -6,12 +6,18 @@ var defaultRadio = {'Uri': 'off', 'Name': 'off'};
 var deleteEditId = null;
 var deleteRadioId = null;
 
+
+function isNotEmpty(o) {
+    return o && Object.keys(o).length > 0
+}
+
 // get active radio for a given server
 // result is never undefined
 function getActiveRadio(server) {
     try {
-        var r = config.Servers[server.Host];
-        return r ? r : defaultRadio;
+        var id = config.Servers[getServerId(server)]
+        var r = id ? config.Backends.Radios[id] : null;
+        return  r ? r : defaultRadio;
     } catch (err) {
         console.log(err);
         return defaultRadio;
@@ -22,7 +28,9 @@ function getActiveRadio(server) {
 // result is never undefined
 function getActiveServer(receiver) {
     try {
-        var s =  config.Receivers[receiver.Host];
+        var id = config.Receivers[getReceiverId(receiver)];
+        var s = id ? config.Backends.Servers[id] : null;
+        s = s ? s : config.Backends.StaticServers[id];
         return s ? s : defaultServer;
     } catch (err) {
         console.log(err);
@@ -32,7 +40,7 @@ function getActiveServer(receiver) {
 
 // create server html id
 function getServerId(server) {
-    return 'server-' + server.Host + '-' + server.Port;
+    return 'server-' + server.Host + ':' + server.Port;
 }
 
 // create receiver html id
@@ -61,7 +69,7 @@ function injectServer(s) {
     var activeRadio = getActiveRadio(s);
     var radios = '<ul class="server-list-ul" data-role="listview" data-inset="true">';
     $.each(config.Backends.Radios, function(i, r) {
-        radios += '<li data-icon="' + getIcon(r.Uri == activeRadio.Uri, r.Uri) + '"><a class="api-call" href="/api/server/' + s.Host + '/radio/' + i + '">' + r.Name + '</a></li>';
+        radios += '<li data-icon="' + getIcon(r.Uri == activeRadio.Uri, r.Uri) + '"><a class="api-call" href="/api/server/?server=' + id + '&radio=' + getRadioId(r) + '">' + r.Name + '</a></li>';
     });
     radios += '</ul>';
     var item = '<div id="' + id + '"><h4>' + s.Name + '</h4>' + radios + '</div>'
@@ -74,17 +82,17 @@ function injectReceiver(r) {
     var servers = '<ul class="receiver-list-ul" data-role="listview" data-inset="true">';
     var activeServer = getActiveServer(r);
     // inject 'off' server
-    servers += '<li data-icon="' + getIcon('off' == activeServer.Host, 'off') + '"><a class="api-call" href="/api/receiver/' + r.Host + '/off/0">off</a></li>';
+    servers += '<li data-icon="' + getIcon('off' == activeServer.Host, 'off') + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=off">off</a></li>';
     // add servers
     if (config.Backends.Servers) {
         $.each(config.Backends.Servers, function(i, e) {
-            servers += '<li data-icon="' + getIcon(e.Host == activeServer.Host, e.Host) + '"><a class="api-call" href="/api/receiver/' + r.Host + '/server/' + i + '">' + e.Name + '</a></li>';
+            servers += '<li data-icon="' + getIcon(e.Host == activeServer.Host, e.Host) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=' + getServerId(e) + '">' + e.Name + '</a></li>';
         });
     }
     // add static servers
     if (config.Backends.StaticServers) {
         $.each(config.Backends.StaticServers, function(i, e) {
-            servers += '<li data-icon="' + getIcon(e.Host == activeServer.Host, e.Host) + '"><a class="api-call" href="/api/receiver/' + r.Host + '/static/' + i + '">' + e.Name + '</a></li>';
+            servers += '<li data-icon="' + getIcon(e.Host == activeServer.Host, e.Host) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=' + getServerId(e) + '">' + e.Name + '</a></li>';
         });
     }
     servers += '</ul>';
@@ -111,7 +119,7 @@ function injectRadio(r) {
 function injectBackends() {
     // create list of servers
     $('#server-list').empty();
-    if (config.Backends.Servers && config.Backends.Servers.length > 0) {
+    if (isNotEmpty(config.Backends.Servers)) {
         $.each(config.Backends.Servers, function(i, e) {
             injectServer(e);
         });
@@ -121,7 +129,7 @@ function injectBackends() {
 
     // create list of receivers
     $('#receiver-list').empty();
-    if (config.Backends.Receivers && config.Backends.Receivers.length > 0) {
+    if (isNotEmpty(config.Backends.Receivers)) {
         $.each(config.Backends.Receivers, function(i, e) {
             injectReceiver(e);
         });
@@ -131,7 +139,7 @@ function injectBackends() {
 
     // create list of radios
     $('#radios-list').empty();
-    if (config.Backends.Radios && config.Backends.Radios.length > 0) {
+    if (isNotEmpty(config.Backends.Radios)) {
         $.each(config.Backends.Radios, function(i, e) {
             injectRadio(e);
         });
