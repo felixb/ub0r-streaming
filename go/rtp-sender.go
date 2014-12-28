@@ -85,44 +85,11 @@ func (m *Manager) playPipeline(uri string) {
 }
 
 func (m *Manager) loop() {
-	var config *Config
-	var err error
 	for true {
-		log.Debug("starting new pipeline")
-		if config == nil {
-			config, err = fetchConfig(m.ConfigUri)
-			if err != nil {
-				log.Error("error fetching config: %s", err)
-				os.Exit(1)
-			}
-		}
-
-		if m.StaticUri != "" {
-			log.Info("starting static stream: %s", m.StaticUri)
-			m.playPipeline(m.StaticUri)
-			config = m.WaitForNewConfig()
-		} else {
-			radio := m.getRadio(config)
-			if radio != nil && radio.Uri != "off" {
-				log.Info("starting radio: %s", radio.Uri)
-				m.playPipeline(radio.Uri)
-			} else if radio != nil && radio.Uri == "off" {
-				log.Info("radio turned off, waiting fo new config")
-			} else {
-				log.Info("unable to find suitable radio for myself (%s), waiting for new config", m.Server().Host)
-			}
-			// watch state/config changes and restart pipeline
-			var newRadio *Radio
-			for newRadio == nil || (radio != nil && radio.Uri == newRadio.Uri) {
-				config = m.WaitForNewConfig()
-				if config == nil {
-					// state changed start all over
-					break
-				}
-				newRadio = m.getRadio(config)
-				log.Debug("new radio: %s", newRadio)
-			}
-		}
+		log.Debug("starting new pipeline with static stream: %s", m.StaticUri)
+		m.playPipeline(m.StaticUri)
+		// we don't listen for new config, but errors will reset the pipeline
+		m.WaitForNewConfig()
 		m.StopPipeline()
 	}
 }
@@ -130,12 +97,8 @@ func (m *Manager) loop() {
 func (m *Manager) scheduleBackendTimeout(c <-chan time.Time) {
 	for {
 		log.Debug("ping config server")
-		uri := m.ConfigUri + "/api/ping/"
-		if m.StaticUri == "" {
-			pingConfig(uri+"server", m.Backend)
-		} else {
-			pingConfig(uri+"static", m.Backend)
-		}
+		uri := m.ConfigUri + "/api/ping/server"
+		pingConfig(uri, m.Backend)
 		<-c
 	}
 }
@@ -143,9 +106,6 @@ func (m *Manager) scheduleBackendTimeout(c <-chan time.Time) {
 func (m *Manager) startSender() {
 	log.Debug("starting sender")
 	go m.loop()
-	if m.StaticUri == "" {
-		go m.watchConfig()
-	}
 	go m.scheduleBackendTimeout(time.Tick(backendTimeout / 2))
 	log.Debug("start gst loop")
 	glib.NewMainLoop(nil).Run()
@@ -159,9 +119,15 @@ func main() {
 	flag.StringVar(&m.Server().Host, "host", hostname, "server host name")
 	flag.IntVar(&m.Server().Port, "port", 48100, "server port")
 	flag.StringVar(&m.ConfigUri, "config-server", "http://localhost:8080", "config server base uri")
-	flag.StringVar(&m.StaticUri, "static", "", "send a static stream")
+	flag.StringVar(&m.StaticUri, "uri", "", "uri to stream into the network")
 	verbose := flag.Bool("verbose", false, "verbose logging")
 	flag.Parse()
 	initLogger(*verbose)
+
+	if m.StaticUri == "" {
+		log.Error("--uri is mandatory")
+		os.Exit(1)
+	}
+
 	m.startSender()
 }

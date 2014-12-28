@@ -43,7 +43,6 @@ type Config struct {
 type Backends struct {
 	Radios        map[string]*Radio
 	Servers       map[string]*Server
-	StaticServers map[string]*Server
 	Receivers     map[string]*Receiver
 }
 
@@ -76,11 +75,6 @@ func (r *Radio) Id() string {
 
 func (b *Backends) hasServer(id string) bool {
 	_, ok := b.Servers[id]
-	return ok
-}
-
-func (b *Backends) hasStaticServer(id string) bool {
-	_, ok := b.StaticServers[id]
 	return ok
 }
 

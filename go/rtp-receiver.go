@@ -14,12 +14,7 @@ import (
 func (m *Manager) getServer(config *Config) *Server {
 	id, ok := config.Receivers[m.Receiver().Id()]
 	if ok {
-		s, ok := config.Backends.Servers[id]
-		if ok {
-			return s
-		} else {
-			return config.Backends.StaticServers[id]
-		}
+		return config.Backends.Servers[id]
 	}
 	return nil
 }

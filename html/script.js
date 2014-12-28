@@ -30,7 +30,6 @@ function getActiveServer(receiver) {
     try {
         var id = config.Receivers[getReceiverId(receiver)];
         var s = id ? config.Backends.Servers[id] : null;
-        s = s ? s : config.Backends.StaticServers[id];
         return s ? s : defaultServer;
     } catch (err) {
         console.log(err);
@@ -86,12 +85,6 @@ function injectReceiver(r) {
     // add servers
     if (config.Backends.Servers) {
         $.each(config.Backends.Servers, function(i, e) {
-            servers += '<li data-icon="' + getIcon(e.Host == activeServer.Host, e.Host) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=' + getServerId(e) + '">' + e.Name + '</a></li>';
-        });
-    }
-    // add static servers
-    if (config.Backends.StaticServers) {
-        $.each(config.Backends.StaticServers, function(i, e) {
             servers += '<li data-icon="' + getIcon(e.Host == activeServer.Host, e.Host) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=' + getServerId(e) + '">' + e.Name + '</a></li>';
         });
     }

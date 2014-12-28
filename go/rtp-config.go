@@ -63,7 +63,6 @@ func NewBackends() *Backends {
 	b := &Backends{}
 	b.Radios = make(map[string]*Radio)
 	b.Servers = make(map[string]*Server)
-	b.StaticServers = make(map[string]*Server)
 	b.Receivers = make(map[string]*Receiver)
 	return b
 }
@@ -74,10 +73,6 @@ func (b *Backends) addReceiver(o *Receiver) {
 
 func (b *Backends) addServer(o *Server) {
 	b.Servers[o.Id()] = o
-}
-
-func (b *Backends) addStatic(o *Server) {
-	b.StaticServers[o.Id()] = o
 }
 
 func (b *Backends) addRadio(o *Radio) {
@@ -161,15 +156,6 @@ func serveApiPing(w http.ResponseWriter, req *http.Request) *ServeError {
 		} else {
 			return NewInternalError(fmt.Sprintf("somthing went wrong parsing body: %s", err))
 		}
-	} else if req.URL.Path == "/api/ping/static" {
-		o, err := unmarshalServer(req)
-		if o != nil && err == nil {
-			config.Backends.addStatic(o)
-			o.Ping()
-			return nil
-		} else {
-			return NewInternalError(fmt.Sprintf("somthing went wrong parsing body: %s", err))
-		}
 	} else {
 		return NewInternalError(fmt.Sprintf("unknown path: %s", req.URL.Path))
 	}
@@ -206,7 +192,7 @@ func serveApiServer(w http.ResponseWriter, req *http.Request) *ServeError {
 	radio_id := req.URL.Query().Get("radio")
 	log.Debug("/api/server server: %s, radio: %s", server_id, radio_id)
 
-	if !config.Backends.hasServer(server_id) && !config.Backends.hasStaticServer(server_id) {
+	if !config.Backends.hasServer(server_id) {
 		return NewInternalError(fmt.Sprintf("server not found: %s", server_id))
 	}
 
@@ -231,7 +217,7 @@ func serveApiReceiver(w http.ResponseWriter, req *http.Request) *ServeError {
 	}
 
 	if server_id != "off" {
-		if !config.Backends.hasServer(server_id) && !config.Backends.hasStaticServer(server_id) {
+		if !config.Backends.hasServer(server_id) {
 			return NewInternalError(fmt.Sprintf("server not found: %s", server_id))
 		}
 	}
@@ -351,12 +337,6 @@ func scheduleBackendTimeout(c <-chan time.Time) {
 			if o.LastPing < threshold {
 				log.Info("remove possibly dead server: %s", o.Id())
 				delete(config.Backends.Servers, k)
-			}
-		}
-		for k, o := range config.Backends.StaticServers {
-			if o.LastPing < threshold {
-				log.Info("remove possibly dead static server: %s", o.Id())
-				delete(config.Backends.StaticServers, k)
 			}
 		}
 	}
