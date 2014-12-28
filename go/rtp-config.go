@@ -16,13 +16,16 @@ import (
 
 const (
 	configCacheFile = "/tmp/rtp-config.json"
+	serverTimeout   = 30 * time.Second
 )
 
 var (
 	config Config
+	managers = make(map[string]*Manager)
 	configCond *sync.Cond
 	saveConfigLock = sync.Mutex{}
 	staticDir *string
+	port *int
 )
 
 // Locking -----------------------------------------
@@ -94,7 +97,7 @@ func (b *Backends) rmRadio(id string) bool {
 func serveWsConfig(ws *websocket.Conn) {
 	log.Info("serve: /ws/config")
 
-	for true {
+	for {
 		waitForNewConfig()
 		b, err := json.Marshal(config)
 		if err != nil {
@@ -186,30 +189,8 @@ func serveApiRadio(w http.ResponseWriter, req *http.Request) *ServeError {
 	return nil
 }
 
-// GET /api/server?server=${server-id}&radio=${radio-id}
-func serveApiServer(w http.ResponseWriter, req *http.Request) *ServeError {
-	server_id := req.URL.Query().Get("server")
-	radio_id := req.URL.Query().Get("radio")
-	log.Debug("/api/server server: %s, radio: %s", server_id, radio_id)
-
-	if !config.Backends.hasServer(server_id) {
-		return NewInternalError(fmt.Sprintf("server not found: %s", server_id))
-	}
-
-	if !config.Backends.hasRadio(radio_id) {
-		return NewInternalError(fmt.Sprintf("radio not found: %s", radio_id))
-	}
-
-	log.Debug("setting new radio for %s: %s", server_id, radio_id)
-	config.Servers[server_id] = radio_id
-	notifyNewConfig()
-	return nil
-}
-
 // GET /api/receiver?receiver=${receiver-id}&server=${server-id}
-func serveApiReceiver(w http.ResponseWriter, req *http.Request) *ServeError {
-	receiver_id := req.URL.Query().Get("receiver")
-	server_id := req.URL.Query().Get("server")
+func serveApiReceiverServer(w http.ResponseWriter, req *http.Request, receiver_id, server_id string) *ServeError {
 	log.Debug("/api/receiver receiver: %s, server: %s", receiver_id, server_id)
 
 	if !config.Backends.hasReceiver(receiver_id) {
@@ -226,6 +207,108 @@ func serveApiReceiver(w http.ResponseWriter, req *http.Request) *ServeError {
 	config.Receivers[receiver_id] = server_id
 	notifyNewConfig()
 	return nil
+}
+
+func findServerWithRadio(radio_id string) (string, bool) {
+	for k, r := range config.Servers {
+		if r == radio_id {
+			return k, true
+		}
+	}
+	return "", false
+}
+
+func findFreePort() int {
+	port := 48100
+	ok := false
+	for !ok {
+		ok = true
+		// loop through servers until free port is found
+		for _, s := range config.Backends.Servers {
+			if s.Internal && s.Port == port {
+				ok = false
+				port += 1
+				break
+			}
+		}
+	}
+	return port
+}
+
+func spawnServer(radio_id string) *Manager {
+	r := config.Backends.Radios[radio_id]
+	log.Info("spawning new sender for radio: %s", r.Uri)
+	hostname, _ := os.Hostname()
+	m := NewServer(true)
+	s := m.Server()
+	s.Name = hostname
+	s.Host = hostname
+	s.Port = findFreePort()
+	m.ConfigUri = fmt.Sprintf("http://localhost:%d", *port)
+	m.StaticUri = r.Uri
+	server_id := s.Id()
+	config.Backends.Servers[server_id] = s
+	config.Servers[server_id] = radio_id
+	return m
+}
+
+func findOrSpawnServer(radio_id string) string {
+	// check if some server is already playing this stream
+	server_id, ok := findServerWithRadio(radio_id)
+	if ok {
+		log.Debug("found running server for radio: %s, %s", radio_id, server_id)
+		return server_id
+	}
+
+	// spawn new server
+	m := spawnServer(radio_id)
+	server_id = m.Server().Id()
+	managers[server_id] = m
+	go m.startSender()
+	return server_id
+}
+
+func stopServer(server_id string) {
+	m := managers[server_id]
+	m.stopSender()
+	delete(config.Servers, server_id)
+	delete(config.Backends.Servers, server_id)
+}
+
+// GET /api/receiver?receiver=${receiver-id}&radio=${radio-id}
+func serveApiReceiverRadio(w http.ResponseWriter, req *http.Request, receiver_id, radio_id string) *ServeError {
+	log.Debug("/api/receiver receiver: %s, radio: %s", receiver_id, radio_id)
+
+	if !config.Backends.hasReceiver(receiver_id) {
+		return NewInternalError(fmt.Sprintf("receiver not found: %s", receiver_id))
+	}
+
+	if radio_id != "off" {
+		if !config.Backends.hasRadio(radio_id) {
+			return NewInternalError(fmt.Sprintf("server not found: %s", radio_id))
+		}
+	}
+
+	log.Debug("setting new radio for %s: %s", receiver_id, radio_id)
+	config.Receivers[receiver_id] = findOrSpawnServer(radio_id)
+	notifyNewConfig()
+	return nil
+}
+
+// GET /api/receiver?receiver=${receiver-id}&server=${server-id}
+// GET /api/receiver?receiver=${receiver-id}&radio=${radio-id}
+func serveApiReceiver(w http.ResponseWriter, req *http.Request) *ServeError {
+	receiver_id := req.URL.Query().Get("receiver")
+	server_id := req.URL.Query().Get("server")
+	radio_id := req.URL.Query().Get("radio")
+
+	if server_id != "" && radio_id == "" {
+		return serveApiReceiverServer(w, req, receiver_id, server_id)
+	} else if radio_id != "" && server_id == "" {
+		return serveApiReceiverRadio(w, req, receiver_id, radio_id)
+	} else {
+		return NewInternalError("server or radio is mandatory")
+	}
 }
 
 func serveJson(w http.ResponseWriter, req *http.Request, obj interface{}) *ServeError {
@@ -252,8 +335,6 @@ func serve(w http.ResponseWriter, req *http.Request) {
 		err = serveApiRadio(w, req)
 	} else if req.URL.Path == "/api/config" {
 		err = serveJson(w, req, config)
-	} else if req.URL.Path == "/api/server/" {
-		err = serveApiServer(w, req)
 	} else if req.URL.Path == "/api/receiver/" {
 		err = serveApiReceiver(w, req)
 	} else {
@@ -289,13 +370,25 @@ func loadConfigCache(configFile *string) {
 			return
 		}
 		json.Unmarshal(d, &config)
+		// delete internal servers
+		for k, s := range config.Backends.Servers {
+			if s.Internal {
+				delete(config.Backends.Servers, k)
+			}
+		}
+		config.Servers = make(map[string]string)
+		// delete receiver -> dead server
+		for k, s := range config.Receivers {
+			if !config.Backends.hasServer(s) {
+				delete(config.Receivers, k)
+			}
+		}
 		log.Debug("config: %s", config)
 	} else {
 		log.Info("create initial config")
 		config.Servers = make(map[string]string)
 		config.Receivers = make(map[string]string)
 		config.Backends = NewBackends()
-		config.Backends.addRadio(&Radio{"Off", "off"})
 		config.Backends.addRadio(&Radio{"Test", "test"})
 	}
 }
@@ -316,7 +409,7 @@ func saveConfigCache(configFile *string) {
 }
 
 func scheduleSaveConfigCache(configFile *string) {
-	for true {
+	for {
 		waitForNewConfig()
 		saveConfigCache(configFile)
 	}
@@ -334,9 +427,37 @@ func scheduleBackendTimeout(c <-chan time.Time) {
 			}
 		}
 		for k, o := range config.Backends.Servers {
-			if o.LastPing < threshold {
+			if !o.Internal && o.LastPing < threshold {
 				log.Info("remove possibly dead server: %s", o.Id())
 				delete(config.Backends.Servers, k)
+			}
+		}
+		for k := range config.Receivers {
+			if !config.Backends.hasReceiver(k) {
+				delete(config.Receivers, k)
+			}
+		}
+	}
+}
+
+func scheduleServerTimeout(c <-chan time.Time) {
+	for _ = range c {
+		for _, s := range config.Backends.Servers {
+			if !s.Internal {
+				continue
+			}
+
+			// search for receivers listening to current server
+			server_id := s.Id()
+			found := false
+			for _, v := range config.Receivers {
+				if v == server_id {
+					found = true
+					break
+				}
+			}
+			if !found {
+				stopServer(server_id)
 			}
 		}
 	}
@@ -346,7 +467,7 @@ func scheduleBackendTimeout(c <-chan time.Time) {
 
 func main() {
 	configFile := flag.String("config-cache", configCacheFile, "File for persisting config state")
-	port := flag.Int("http", 8080, "Port for binding the config server")
+	port = flag.Int("http", 8080, "Port for binding the config server")
 	staticDir = flag.String("webroot", "static", "Directory for serving static content")
 	verbose := flag.Bool("verbose", false, "verbose logging")
 	flag.Parse()
@@ -359,6 +480,7 @@ func main() {
 	loadConfigCache(configFile)
 	go scheduleSaveConfigCache(configFile)
 	go scheduleBackendTimeout(time.Tick(backendTimeout))
+	go scheduleServerTimeout(time.Tick(serverTimeout))
 
 	httpd(*port)
 

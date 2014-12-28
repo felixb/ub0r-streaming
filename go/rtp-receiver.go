@@ -1,15 +1,123 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
+	"io/ioutil"
 	"net"
+	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
+	"code.google.com/p/go.net/websocket"
 	"github.com/ziutek/glib"
 	"github.com/ziutek/gst"
 )
+
+func fetchObject(uri string, obj interface{}) (interface{}, error) {
+	log.Debug("fetch object: %s", uri)
+	resp, err := http.Get(uri)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(body, obj)
+	if err != nil {
+		return nil, err
+	}
+
+	return obj, nil
+}
+
+func fetchConfig(base string) (*Config, error) {
+	var config Config
+	_, err := fetchObject(base+"/api/config", &config)
+	return &config, err
+}
+
+func readBlob(ws *websocket.Conn) ([]byte, error) {
+	buf := make([]byte, 0)
+
+	for {
+		msg := make([]byte, 2048)
+		var n int
+		var err error
+		if n, err = ws.Read(msg); err != nil {
+			return nil, err
+		}
+		log.Debug("Received %db: %s", n, msg[:n])
+		buf = append(buf, msg[:n]...)
+
+		if len(msg) > n {
+			return buf, nil
+		}
+	}
+
+	// should never happen
+	return nil, nil
+}
+
+func (m *Manager) readConfig(ws *websocket.Conn) error {
+	buf, err := readBlob(ws)
+	if err != nil {
+		return err
+	}
+
+	var config Config
+	err = json.Unmarshal(buf, &config)
+	if err != nil {
+		return err
+	}
+
+	// send new config to pipeline
+	log.Debug("got new config: %s", config)
+	m.NewConfig(&config)
+	return nil
+}
+
+func (m *Manager) readConfigs(ws *websocket.Conn) {
+	defer ws.Close()
+	// read from websocket
+	for {
+		err := m.readConfig(ws)
+		if err != nil {
+			log.Error("error reading config: %s", err)
+			return
+		}
+	}
+}
+
+func (m *Manager) watchConfig() {
+	backOff := time.Second
+
+	for {
+		origin := m.ConfigUri
+		url := strings.Replace(m.ConfigUri, "http", "ws", 1) + "/ws/config"
+		ws, err := websocket.Dial(url, "", origin)
+		if err != nil {
+			log.Error("unable to reach config server: %s", err)
+			time.Sleep(backOff)
+			// exponential back off, max = 1h
+			if backOff < time.Hour {
+				backOff *= 2
+			} else {
+				backOff = time.Hour
+			}
+		} else {
+			// reset back off
+			backOff = time.Second
+			m.readConfigs(ws)
+		}
+	}
+}
 
 func (m *Manager) getServer(config *Config) *Server {
 	id, ok := config.Receivers[m.Receiver().Id()]
@@ -73,7 +181,7 @@ func (m *Manager) playPipeline(server *Server) {
 func (m *Manager) loop() {
 	var config *Config
 	var err error
-	for true {
+	for {
 		log.Debug("starting new pipeline")
 		if config == nil {
 			config, err = fetchConfig(m.ConfigUri)

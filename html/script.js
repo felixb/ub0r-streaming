@@ -2,6 +2,7 @@ var config = {};
 
 var defaultServer = {'Host': 'off', 'Port': 0};
 var defaultRadio = {'Uri': 'off', 'Name': 'off'};
+var offId = getServerId(defaultServer)
 
 var deleteEditId = null;
 var deleteRadioId = null;
@@ -27,6 +28,7 @@ function getActiveRadio(server) {
 // get active server for a given receiver
 // result is never undefined
 function getActiveServer(receiver) {
+    // TODO handle internal servers -> radioId?
     try {
         var id = config.Receivers[getReceiverId(receiver)];
         var s = id ? config.Backends.Servers[id] : null;
@@ -44,7 +46,7 @@ function getServerId(server) {
 
 // create receiver html id
 function getReceiverId(receiver) {
-    return 'receiver-' + receiver.Host;
+    return 'receiver-' + receiver.Name;
 }
 
 // create receiver html id
@@ -54,25 +56,12 @@ function getRadioId(radio) {
 }
 
 // get data-icon value
-function getIcon(active, uri) {
+function getIcon(active, off) {
     if (active) {
-        return uri == 'off' ? 'power' : 'audio';
+        return off ? 'power' : 'audio';
     } else {
         return 'false';
     }
-}
-
-// create list of radios for a single server
-function injectServer(s) {
-    var id = getServerId(s);
-    var activeRadio = getActiveRadio(s);
-    var radios = '<ul class="server-list-ul" data-role="listview" data-inset="true">';
-    $.each(config.Backends.Radios, function(i, r) {
-        radios += '<li data-icon="' + getIcon(r.Uri == activeRadio.Uri, r.Uri) + '"><a class="api-call" href="/api/server/?server=' + id + '&radio=' + getRadioId(r) + '">' + r.Name + '</a></li>';
-    });
-    radios += '</ul>';
-    var item = '<div id="' + id + '"><h4>' + s.Name + '</h4>' + radios + '</div>'
-    $('#server-list').append(item);
 }
 
 // create list of servers for a single receiver
@@ -80,12 +69,25 @@ function injectReceiver(r) {
     var id = getReceiverId(r);
     var servers = '<ul class="receiver-list-ul" data-role="listview" data-inset="true">';
     var activeServer = getActiveServer(r);
+    var activeId = getServerId(activeServer);
+    var activeRadio = getActiveRadio(activeServer);
+    var activeRadioId = getRadioId(activeRadio);
     // inject 'off' server
-    servers += '<li data-icon="' + getIcon('off' == activeServer.Host, 'off') + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=off">off</a></li>';
+    servers += '<li data-icon="' + getIcon(offId == activeId, true) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=off">Off</a></li>';
     // add servers
     if (config.Backends.Servers) {
         $.each(config.Backends.Servers, function(i, e) {
-            servers += '<li data-icon="' + getIcon(e.Host == activeServer.Host, e.Host) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=' + getServerId(e) + '">' + e.Name + '</a></li>';
+            if (!e.Internal) {
+                var sId = getServerId(e);
+                servers += '<li data-icon="' + getIcon(sId == activeId, false) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=' + sId + '">' + e.Name + '</a></li>';
+            }
+        });
+    }
+    // add radios
+    if (config.Backends.Radios) {
+        $.each(config.Backends.Radios, function(i, e) {
+            var rId = getRadioId(e);
+            servers += '<li data-icon="' + getIcon(rId == activeRadioId, false) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&radio=' + rId + '">' + e.Name + '</a></li>';
         });
     }
     servers += '</ul>';
@@ -110,16 +112,6 @@ function injectRadio(r) {
 
 // create html elements representing the backends
 function injectBackends() {
-    // create list of servers
-    $('#server-list').empty();
-    if (isNotEmpty(config.Backends.Servers)) {
-        $.each(config.Backends.Servers, function(i, e) {
-            injectServer(e);
-        });
-    } else {
-      $('#server-list').append("no active server found");
-    }
-
     // create list of receivers
     $('#receiver-list').empty();
     if (isNotEmpty(config.Backends.Receivers)) {
@@ -141,7 +133,6 @@ function injectBackends() {
     }
 
     // init list views to make them look beautiful
-    $('.server-list-ul').listview().listview('refresh');
     $('.receiver-list-ul').listview().listview('refresh');
     $('.radio-list-ul').listview().listview('refresh');
 

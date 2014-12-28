@@ -23,6 +23,7 @@ type Server struct {
 	Name     string
 	Host     string
 	Port     int
+	Internal bool
 	LastPing int64
 }
 
@@ -66,7 +67,7 @@ func (s *Server) Id() string {
 }
 
 func (r *Receiver) Id() string {
-	return fmt.Sprintf("receiver-%s", r.Host)
+	return fmt.Sprintf("receiver-%s", r.Name)
 }
 
 func (r *Radio) Id() string {
