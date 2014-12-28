@@ -30,10 +30,22 @@ type Manager struct {
 	RetryCount int
 }
 
-func NewManager() *Manager {
+func newManager() *Manager {
 	m := Manager{}
 	m.configSync = make(chan *Config, 2)
 	return &m
+}
+
+func NewReceiver() *Manager {
+	m := newManager()
+	m.Backend = &Receiver{}
+	return m
+}
+
+func NewServer() *Manager {
+	m := newManager()
+	m.Backend = &Server{}
+	return m
 }
 
 func (m *Manager) Receiver() *Receiver {
@@ -199,7 +211,7 @@ func readBlob(ws *websocket.Conn) ([]byte, error) {
 	return nil, nil
 }
 
-func readConfig(m *Manager, ws *websocket.Conn) error {
+func (m *Manager) readConfig(ws *websocket.Conn) error {
 	buf, err := readBlob(ws)
 	if err != nil {
 		return err
@@ -217,11 +229,11 @@ func readConfig(m *Manager, ws *websocket.Conn) error {
 	return nil
 }
 
-func readConfigs(m *Manager, ws *websocket.Conn) {
+func (m *Manager) readConfigs(ws *websocket.Conn) {
 	defer ws.Close()
 	// read from websocket
 	for true {
-		err := readConfig(m, ws)
+		err := m.readConfig(ws)
 		if err != nil {
 			log.Error("error reading config: %s", err)
 			return
@@ -229,7 +241,7 @@ func readConfigs(m *Manager, ws *websocket.Conn) {
 	}
 }
 
-func watchConfig(m *Manager) {
+func (m *Manager) watchConfig() {
 	backOff := time.Second
 
 	for true {
@@ -248,7 +260,7 @@ func watchConfig(m *Manager) {
 		} else {
 			// reset back off
 			backOff = time.Second
-			readConfigs(m, ws)
+			m.readConfigs(ws)
 		}
 	}
 }

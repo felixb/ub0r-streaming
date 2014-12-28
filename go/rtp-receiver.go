@@ -24,7 +24,7 @@ func (m *Manager) getServer(config *Config) *Server {
 	return nil
 }
 
-func checkServer(server *Server) bool {
+func (m *Manager) checkServer(server *Server) bool {
 	conn, err := net.Dial("tcp", net.JoinHostPort(server.Host, strconv.Itoa(server.Port)))
 	if conn != nil {
 		conn.Close()
@@ -35,7 +35,7 @@ func checkServer(server *Server) bool {
 	return err == nil
 }
 
-func buildPipeline(m *Manager, server *Server) {
+func (m *Manager) buildPipeline(server *Server) {
 	src := makeElem("tcpclientsrc")
 	src.SetProperty("host", server.Host)
 	src.SetProperty("port", server.Port)
@@ -58,11 +58,11 @@ func buildPipeline(m *Manager, server *Server) {
 	linkElems(dec, sink)
 }
 
-func playPipeline(m *Manager, server *Server) {
+func (m *Manager) playPipeline(server *Server) {
 	m.Pipeline = nil
-	if checkServer(server) {
+	if m.checkServer(server) {
 		m.RetryCount = 0
-		buildPipeline(m, server)
+		m.buildPipeline(server)
 		m.StartPipeline()
 	} else if m.RetryCount >= maxRetry {
 		log.Warning("max retries reached, wait for new config")
@@ -75,7 +75,7 @@ func playPipeline(m *Manager, server *Server) {
 	}
 }
 
-func loop(m *Manager) {
+func (m *Manager) loop() {
 	var config *Config
 	var err error
 	for true {
@@ -91,7 +91,7 @@ func loop(m *Manager) {
 		server := m.getServer(config)
 		if server != nil {
 			log.Info("connecting to server: %s:%d", server.Host, server.Port)
-			playPipeline(m, server)
+			m.playPipeline(server)
 		} else {
 			log.Info("unable to find suitable server for myself (%s), waiting for new config", m.Receiver().Host)
 		}
@@ -130,10 +130,19 @@ func (m *Manager) scheduleBackendTimeout(c <-chan time.Time) {
 	}
 }
 
+func (m *Manager) startReceiver() {
+	log.Debug("starting receiver")
+	go m.loop()
+	go m.watchConfig()
+	go m.scheduleBackendTimeout(time.Tick(backendTimeout / 2))
+	log.Debug("start gst loop")
+	glib.NewMainLoop(nil).Run()
+	log.Debug("receiver stopped")
+}
+
 func main() {
 	hostname, _ := os.Hostname()
-	m := NewManager()
-	m.Backend = &Receiver{}
+	m := NewReceiver()
 	flag.StringVar(&m.Receiver().Name, "name", hostname, "receiver name")
 	flag.StringVar(&m.Receiver().Host, "host", hostname, "receiver host name")
 	flag.StringVar(&m.ConfigUri, "config-server", "http://localhost:8080", "config server base uri")
@@ -141,11 +150,5 @@ func main() {
 	flag.Parse()
 	initLogger(*verbose)
 
-	log.Debug("starting receiver")
-	go loop(m)
-	go watchConfig(m)
-	go m.scheduleBackendTimeout(time.Tick(backendTimeout / 2))
-	log.Debug("start gst loop")
-	glib.NewMainLoop(nil).Run()
-	log.Debug("receiver stopped")
+	m.startReceiver()
 }

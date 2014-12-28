@@ -18,23 +18,23 @@ func (m *Manager) getRadio(config *Config) *Radio {
 	return nil
 }
 
-func setDevice(src *gst.Element, uri string) {
+func (m *Manager) setDevice(src *gst.Element, uri string) {
 	if strings.Index(uri, ":") > 0 {
 		parts := strings.SplitN(uri, ":", 2)
 		src.SetProperty("device", parts[1])
 	}
 }
 
-func buildSrc(uri string) *gst.Element {
+func (m *Manager) buildSrc(uri string) *gst.Element {
 	var src *gst.Element
 	if uri == "test" {
 		src = makeElem("audiotestsrc")
 	} else if strings.HasPrefix(uri, "alsa") {
 		src = makeElem("alsasrc")
-		setDevice(src, uri)
+		m.setDevice(src, uri)
 	} else if strings.HasPrefix(uri, "pulse") {
 		src = makeElem("pulsesrc")
-		setDevice(src, uri)
+		m.setDevice(src, uri)
 		// TODO add filter for stereo
 	} else {
 		src = makeElem("uridecodebin")
@@ -44,8 +44,8 @@ func buildSrc(uri string) *gst.Element {
 	return src
 }
 
-func buildPipeline(m *Manager, uri string, config *Server) {
-	src := buildSrc(uri)
+func (m *Manager) buildPipeline(uri string) {
+	src := m.buildSrc(uri)
 	pipe1 := makeElem("audioconvert")
 	pipe2 := makeElem("audioresample")
 	pipe3 := makeElem("opusenc")
@@ -55,8 +55,9 @@ func buildPipeline(m *Manager, uri string, config *Server) {
 	pipe3.SetProperty("packet-loss-percentage", 0)
 	pipe4 := makeElem("oggmux")
 	sink := makeElem("tcpserversink")
-	sink.SetProperty("host", config.Host)
-	sink.SetProperty("port", config.Port)
+	s := m.Server()
+	sink.SetProperty("host", s.Host)
+	sink.SetProperty("port", s.Port)
 
 	m.Pipeline = gst.NewPipeline("pipeline")
 	bus := m.Pipeline.GetBus()
@@ -77,13 +78,13 @@ func buildPipeline(m *Manager, uri string, config *Server) {
 	linkElems(pipe4, sink)
 }
 
-func playPipeline(m *Manager, uri string, config *Server) {
+func (m *Manager) playPipeline(uri string) {
 	m.Pipeline = nil
-	buildPipeline(m, uri, config)
+	m.buildPipeline(uri)
 	m.StartPipeline()
 }
 
-func loop(m *Manager) {
+func (m *Manager) loop() {
 	var config *Config
 	var err error
 	for true {
@@ -98,13 +99,13 @@ func loop(m *Manager) {
 
 		if m.StaticUri != "" {
 			log.Info("starting static stream: %s", m.StaticUri)
-			playPipeline(m, m.StaticUri, m.Server())
+			m.playPipeline(m.StaticUri)
 			config = m.WaitForNewConfig()
 		} else {
 			radio := m.getRadio(config)
 			if radio != nil && radio.Uri != "off" {
 				log.Info("starting radio: %s", radio.Uri)
-				playPipeline(m, radio.Uri, m.Server())
+				m.playPipeline(radio.Uri)
 			} else if radio != nil && radio.Uri == "off" {
 				log.Info("radio turned off, waiting fo new config")
 			} else {
@@ -139,10 +140,21 @@ func (m *Manager) scheduleBackendTimeout(c <-chan time.Time) {
 	}
 }
 
+func (m *Manager) startSender() {
+	log.Debug("starting sender")
+	go m.loop()
+	if m.StaticUri == "" {
+		go m.watchConfig()
+	}
+	go m.scheduleBackendTimeout(time.Tick(backendTimeout / 2))
+	log.Debug("start gst loop")
+	glib.NewMainLoop(nil).Run()
+	log.Debug("sender stopped")
+}
+
 func main() {
 	hostname, _ := os.Hostname()
-	m := NewManager()
-	m.Backend = &Server{}
+	m := NewServer()
 	flag.StringVar(&m.Server().Name, "name", hostname, "server name")
 	flag.StringVar(&m.Server().Host, "host", hostname, "server host name")
 	flag.IntVar(&m.Server().Port, "port", 48100, "server port")
@@ -151,15 +163,5 @@ func main() {
 	verbose := flag.Bool("verbose", false, "verbose logging")
 	flag.Parse()
 	initLogger(*verbose)
-
-
-	log.Debug("starting receiver")
-	go loop(m)
-	if m.StaticUri == "" {
-		go watchConfig(m)
-	}
-	go m.scheduleBackendTimeout(time.Tick(backendTimeout / 2))
-	log.Debug("start gst loop")
-	glib.NewMainLoop(nil).Run()
-	log.Debug("receiver stopped")
+	m.startSender()
 }
