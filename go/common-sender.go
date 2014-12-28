@@ -82,13 +82,17 @@ func (m *Manager) playPipeline(uri string) {
 	m.StartPipeline()
 }
 
-func (m *Manager) loop() {
+func (m *Manager) loop(l *glib.MainLoop) {
 	for m.running {
 		log.Debug("starting new pipeline with static stream: %s", m.StaticUri)
 		m.playPipeline(m.StaticUri)
 		// we don't listen for new config, but errors will reset the pipeline
 		m.WaitForNewConfig()
 		m.StopPipeline()
+	}
+
+	if l != nil {
+		l.Quit()
 	}
 }
 
@@ -104,15 +108,15 @@ func (m *Manager) scheduleBackendTimeout(c <-chan time.Time) {
 func (m *Manager) startSender() {
 	log.Debug("starting sender")
 	m.running = true
-	go m.loop()
+	l := glib.NewMainLoop(nil)
+	go m.loop(l)
 	if !m.Server().Internal {
 		go m.scheduleBackendTimeout(time.Tick(backendTimeout / 2))
 	}
 	log.Debug("start gst loop")
-	glib.NewMainLoop(nil).Run()
+	l.Run()
 	log.Debug("sender stopped")
 }
-
 
 func (m *Manager) stopSender() {
 	log.Info("stopping sender: %s", m.Server().Id())

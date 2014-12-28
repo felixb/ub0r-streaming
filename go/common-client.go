@@ -18,7 +18,7 @@ const (
 // ------------ manager
 
 type Manager struct {
-	Pipeline *gst.Pipeline
+	Pipeline   *gst.Pipeline
 	configSync chan *Config
 	ConfigUri  string
 	StaticUri  string
