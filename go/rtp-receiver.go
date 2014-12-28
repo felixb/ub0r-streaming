@@ -61,7 +61,7 @@ func playPipeline(m *Manager, server *Server) {
 		// schedule recheck
 		m.RetryCount += 1
 		time.Sleep(retryInterval)
-		m.ConfigSync<-nil
+		m.NewConfig(nil)
 		m.RetryCount = 0
 	}
 }
@@ -93,8 +93,7 @@ func loop(m *Manager) {
 			log.Debug("wait for new config")
 			log.Debug("old server: %s", server)
 			log.Debug("new server: %s", newServer)
-			config = <-m.ConfigSync
-			log.Debug("got new config: %s", config)
+			config = m.WaitForNewConfig()
 			if config == nil {
 				// state changed start all over
 				break
@@ -116,8 +115,8 @@ func loop(m *Manager) {
 func (m *Manager) scheduleBackendTimeout(c <-chan time.Time) {
 	for {
 		log.Debug("ping config server")
-		uri := m.ConfigUri+"/api/ping/"
-		pingConfig(uri + "receiver", m.Backend)
+		uri := m.ConfigUri + "/api/ping/"
+		pingConfig(uri+"receiver", m.Backend)
 		<-c
 	}
 }

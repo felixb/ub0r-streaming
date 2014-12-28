@@ -22,7 +22,7 @@ const (
 
 type Manager struct {
 	Pipeline *gst.Pipeline
-	ConfigSync chan *Config
+	configSync chan *Config
 	ConfigUri  string
 	StaticUri  string
 	State      gst.State
@@ -32,7 +32,7 @@ type Manager struct {
 
 func NewManager() *Manager {
 	m := Manager{}
-	m.ConfigSync = make(chan *Config, 2)
+	m.configSync = make(chan *Config, 2)
 	return &m
 }
 
@@ -58,18 +58,28 @@ func (m *Manager) onMessage(bus *gst.Bus, msg *gst.Message) {
 		}
 	case gst.MESSAGE_EOS:
 		log.Info("pipeline: end of stream")
-	m.ConfigSync<-nil
+		m.NewConfig(nil)
 	case gst.MESSAGE_ERROR:
 		err, debug := msg.ParseError()
 		log.Error("pipeline error: %s (debug: %s)", err, debug)
 		// try to reconnect
 		time.Sleep(retryInterval)
-	m.ConfigSync<-nil
+		m.NewConfig(nil)
 	case gst.MESSAGE_BUFFERING:
 		// ignore
 	default:
 		log.Debug("pipeline message: %s", t)
 	}
+}
+
+func (m *Manager) NewConfig(config *Config) {
+	m.configSync<-config
+}
+
+func (m *Manager) WaitForNewConfig() *Config {
+	config := <-m.configSync
+	log.Debug("got new config: %s", config)
+	return config
 }
 
 func (m *Manager) StartPipeline() {
@@ -203,7 +213,7 @@ func readConfig(m *Manager, ws *websocket.Conn) error {
 
 	// send new config to pipeline
 	log.Debug("got new config: %s", config)
-	m.ConfigSync<-&config
+	m.NewConfig(&config)
 	return nil
 }
 

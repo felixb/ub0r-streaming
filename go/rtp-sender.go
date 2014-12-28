@@ -95,7 +95,7 @@ func loop(m *Manager) {
 		if m.StaticUri != "" {
 			log.Info("starting static stream: %s", m.StaticUri)
 			playPipeline(m, m.StaticUri, m.Server())
-			config = <-m.ConfigSync
+			config = m.WaitForNewConfig()
 		} else {
 			radio := getRadio(config, m.Server().Host)
 			if radio != nil && radio.Uri != "off" {
@@ -109,8 +109,7 @@ func loop(m *Manager) {
 			// watch state/config changes and restart pipeline
 			var newRadio *Radio
 			for newRadio == nil || (radio != nil && radio.Uri == newRadio.Uri) {
-				config = <-m.ConfigSync
-				log.Debug("got new config: %s", config)
+				config = m.WaitForNewConfig()
 				if config == nil {
 					// state changed start all over
 					break
