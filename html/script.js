@@ -7,9 +7,22 @@ var offId = getServerId(defaultServer)
 var deleteEditId = null;
 var deleteRadioId = null;
 
-
 function isNotEmpty(o) {
     return o && Object.keys(o).length > 0
+}
+
+function sortNames(a, b) {
+    var an = a.Name.toLowerCase();
+    var bn = b.Name.toLowerCase();
+    if (an < bn) return -1;
+    if (an > bn) return 1;
+    return 0
+}
+
+function eachSorted(obj, s, f) {
+    var keys = Object.keys(obj);
+    keys.sort(function(a, b){return s(obj[a], obj[b])});
+    $.each(keys, function(i, k) {f(k, obj[k])})
 }
 
 // get active radio for a given server
@@ -76,7 +89,7 @@ function injectReceiver(r) {
     servers += '<li data-icon="' + getIcon(offId == activeId, true) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=' + offId + '">Off</a></li>';
     // add servers
     if (config.Backends.Servers) {
-        $.each(config.Backends.Servers, function(k, e) {
+        eachSorted(config.Backends.Servers, sortNames, function(k, e) {
             if (!e.Internal) {
                 servers += '<li data-icon="' + getIcon(k == activeId, false) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=' + k + '">' + e.Name + '</a></li>';
             }
@@ -84,7 +97,7 @@ function injectReceiver(r) {
     }
     // add radios
     if (config.Backends.Radios) {
-        $.each(config.Backends.Radios, function(k, e) {
+        eachSorted(config.Backends.Radios, sortNames, function(k, e) {
             servers += '<li data-icon="' + getIcon(k == activeRadioId, false) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&radio=' + k + '">' + e.Name + '</a></li>';
         });
     }
@@ -113,7 +126,7 @@ function injectBackends() {
     // create list of receivers
     $('#receiver-list').empty();
     if (isNotEmpty(config.Backends.Receivers)) {
-        $.each(config.Backends.Receivers, function(i, e) {
+        eachSorted(config.Backends.Receivers, sortNames, function(k, e) {
             injectReceiver(e);
         });
     } else {
@@ -123,7 +136,7 @@ function injectBackends() {
     // create list of radios
     $('#radios-list').empty();
     if (isNotEmpty(config.Backends.Radios)) {
-        $.each(config.Backends.Radios, function(i, e) {
+        eachSorted(config.Backends.Radios, sortNames, function(k, e) {
             injectRadio(e);
         });
     } else {
