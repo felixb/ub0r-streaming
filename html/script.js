@@ -73,21 +73,19 @@ function injectReceiver(r) {
     var activeRadio = getActiveRadio(activeServer);
     var activeRadioId = getRadioId(activeRadio);
     // inject 'off' server
-    servers += '<li data-icon="' + getIcon(offId == activeId, true) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=off">Off</a></li>';
+    servers += '<li data-icon="' + getIcon(offId == activeId, true) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=' + offId + '">Off</a></li>';
     // add servers
     if (config.Backends.Servers) {
-        $.each(config.Backends.Servers, function(i, e) {
+        $.each(config.Backends.Servers, function(k, e) {
             if (!e.Internal) {
-                var sId = getServerId(e);
-                servers += '<li data-icon="' + getIcon(sId == activeId, false) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=' + sId + '">' + e.Name + '</a></li>';
+                servers += '<li data-icon="' + getIcon(k == activeId, false) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=' + k + '">' + e.Name + '</a></li>';
             }
         });
     }
     // add radios
     if (config.Backends.Radios) {
-        $.each(config.Backends.Radios, function(i, e) {
-            var rId = getRadioId(e);
-            servers += '<li data-icon="' + getIcon(rId == activeRadioId, false) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&radio=' + rId + '">' + e.Name + '</a></li>';
+        $.each(config.Backends.Radios, function(k, e) {
+            servers += '<li data-icon="' + getIcon(k == activeRadioId, false) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&radio=' + k + '">' + e.Name + '</a></li>';
         });
     }
     servers += '</ul>';
