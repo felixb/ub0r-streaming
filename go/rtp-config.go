@@ -32,7 +32,7 @@ var (
 // Locking -----------------------------------------
 
 func waitForNewConfig() {
-	log.Debug("Wait for configCond: %s", configCond)
+	log.Debug("Wait for configCond: %s", *configCond)
 	configCond.L.Lock()
 	configCond.Wait()
 	configCond.L.Unlock()
@@ -71,12 +71,24 @@ func NewBackends() *Backends {
 	return b
 }
 
-func (b *Backends) addReceiver(o *Receiver) {
-	b.Receivers[o.Id()] = o
+func (b *Backends) pingReceiver(o *Receiver) {
+	id := o.Id()
+	if r, ok := b.Receivers[id]; ok {
+		r.Ping()
+	} else {
+		b.Receivers[id] = o
+		o.Ping()
+	}
 }
 
-func (b *Backends) addServer(o *Server) {
-	b.Servers[o.Id()] = o
+func (b *Backends) pingServer(o *Server) {
+	id := o.Id()
+	if s, ok := b.Servers[id]; ok {
+		s.Ping()
+	}else {
+		b.Servers[id] = o
+		o.Ping()
+	}
 }
 
 func (b *Backends) addRadio(o *Radio) {
@@ -114,48 +126,37 @@ func unmarshalReceiver(req *http.Request) (*Receiver, error) {
 	var o Receiver
 	decoder := json.NewDecoder(req.Body)
 	err := decoder.Decode(&o)
-	if err != nil {
-		return nil, err
-	}
-	return &o, nil
+	return &o, err
 }
 
 func unmarshalServer(req *http.Request) (*Server, error) {
 	var o Server
 	decoder := json.NewDecoder(req.Body)
 	err := decoder.Decode(&o)
-	if err != nil {
-		return nil, err
-	}
-	return &o, nil
+	return &o, err
 }
 
 func unmarshalRadio(req *http.Request) (*Radio, error) {
 	var o Radio
 	decoder := json.NewDecoder(req.Body)
 	err := decoder.Decode(&o)
-	if err != nil {
-		return nil, err
-	}
-	return &o, nil
+	return &o, err
 }
 
 // POST /api/ping
 func serveApiPing(w http.ResponseWriter, req *http.Request) *ServeError {
 	if req.URL.Path == "/api/ping/receiver" {
 		o, err := unmarshalReceiver(req)
-		if o != nil && err == nil {
-			config.Backends.addReceiver(o)
-			o.Ping()
+		if err == nil {
+			config.Backends.pingReceiver(o)
 			return nil
 		} else {
 			return NewInternalError(fmt.Sprintf("somthing went wrong parsing body: %s", err))
 		}
 	} else if req.URL.Path == "/api/ping/server" {
 		o, err := unmarshalServer(req)
-		if o != nil && err == nil {
-			config.Backends.addServer(o)
-			o.Ping()
+		if err == nil {
+			config.Backends.pingServer(o)
 			return nil
 		} else {
 			return NewInternalError(fmt.Sprintf("somthing went wrong parsing body: %s", err))
@@ -171,7 +172,7 @@ func serveApiRadio(w http.ResponseWriter, req *http.Request) *ServeError {
 	log.Debug("/api/radio id: %s", id)
 	if req.Method == "POST" {
 		o, err := unmarshalRadio(req)
-		if o == nil || err != nil {
+		if err != nil {
 			return NewInternalError(fmt.Sprintf("somthing went wrong parsing body: %s", err))
 		}
 		config.Backends.addRadio(o)
