@@ -29,8 +29,8 @@ function eachSorted(obj, s, f) {
 // result is never undefined
 function getActiveRadioId(serverId) {
     try {
-        var id = config.Servers[serverId]
-        return id ? id : offId;
+        var s = config.Servers[serverId]
+        return s && s.RadioId != '' ? s.RadioId : offId;
     } catch (err) {
         console.log(err);
         return offId;
@@ -41,8 +41,8 @@ function getActiveRadioId(serverId) {
 // result is never undefined
 function getActiveServerId(receiverId) {
     try {
-        var id = config.Receivers[receiverId];
-        return id ? id : offId;
+        var r = config.Receivers[receiverId];
+        return r && r.ServerId != '' ? r.ServerId : offId;
     } catch (err) {
         console.log(err);
         return offId;
@@ -66,16 +66,16 @@ function injectReceiver(id, r) {
     // inject 'off' server
     servers += '<li data-icon="' + getIcon(offId == activeServerId, true) + '"><a class="api-call" href="/api/receiver?id=' + id + '&server=' + offId + '">Off</a></li>';
     // add servers
-    if (config.Backends.Servers) {
-        eachSorted(config.Backends.Servers, sortNames, function(k, e) {
+    if (config.Servers) {
+        eachSorted(config.Servers, sortNames, function(k, e) {
             if (!e.Internal) {
                 servers += '<li data-icon="' + getIcon(k == activeServerId, false) + '"><a class="api-call" href="/api/receiver?id=' + id + '&server=' + k + '">' + e.Name + '</a></li>';
             }
         });
     }
     // add radios
-    if (config.Backends.Radios) {
-        eachSorted(config.Backends.Radios, sortNames, function(k, e) {
+    if (config.Radios) {
+        eachSorted(config.Radios, sortNames, function(k, e) {
             servers += '<li data-icon="' + getIcon(k == activeRadioId, false) + '"><a class="api-call" href="/api/receiver?id=' + id + '&radio=' + k + '">' + e.Name + '</a></li>';
         });
     }
@@ -103,8 +103,8 @@ function injectRadio(id, r) {
 function injectBackends() {
     // create list of receivers
     $('#receiver-list').empty();
-    if (isNotEmpty(config.Backends.Receivers)) {
-        eachSorted(config.Backends.Receivers, sortNames, function(k, e) {
+    if (isNotEmpty(config.Receivers)) {
+        eachSorted(config.Receivers, sortNames, function(k, e) {
             injectReceiver(k, e);
         });
     } else {
@@ -113,8 +113,8 @@ function injectBackends() {
 
     // create list of radios
     $('#radios-list').empty();
-    if (isNotEmpty(config.Backends.Radios)) {
-        eachSorted(config.Backends.Radios, sortNames, function(k, e) {
+    if (isNotEmpty(config.Radios)) {
+        eachSorted(config.Radios, sortNames, function(k, e) {
             injectRadio(k, e);
         });
     } else {
@@ -202,8 +202,8 @@ function watchConfig() {
 function showEditRadioDialog(id) {
     editRadioId = id;
     if (id) {
-        $("#add-radio-name").val(config.Backends.Radios[id].Name);
-        $("#add-radio-uri").val(config.Backends.Radios[id].Uri);
+        $("#add-radio-name").val(config.Radios[id].Name);
+        $("#add-radio-uri").val(config.Radios[id].Uri);
     } else {
         $("#add-radio-name").val("");
         $("#add-radio-uri").val("");

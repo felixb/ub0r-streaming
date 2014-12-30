@@ -21,7 +21,6 @@ type Manager struct {
 	Pipeline   *gst.Pipeline
 	configSync chan *Config
 	ConfigUri  string
-	StaticUri  string
 	State      gst.State
 	Backend    Pinger
 	RetryCount int
@@ -38,6 +37,7 @@ func newManager() *Manager {
 func NewReceiver() *Manager {
 	r := Receiver{}
 	r.Volume = 100
+	r.ServerId = "off"
 	m := newManager()
 	m.Backend = &r
 	return m

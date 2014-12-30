@@ -8,14 +8,6 @@ import (
 	"github.com/ziutek/gst"
 )
 
-func (m *Manager) getRadio(config *Config) *Radio {
-	id, ok := config.Servers[m.Server().Id()]
-	if ok {
-		return config.Backends.Radios[id]
-	}
-	return nil
-}
-
 func (m *Manager) setDevice(src *gst.Element, uri string) {
 	if strings.Index(uri, ":") > 0 {
 		parts := strings.SplitN(uri, ":", 2)
@@ -90,8 +82,9 @@ func (m *Manager) playPipeline(uri string) {
 
 func (m *Manager) loop(l *glib.MainLoop) {
 	for m.running {
-		log.Debug("starting new pipeline with static stream: %s", m.StaticUri)
-		m.playPipeline(m.StaticUri)
+		uri := m.Server().RadioUri
+		log.Debug("starting new pipeline with static stream: %s", uri)
+		m.playPipeline(uri)
 		// we don't listen for new config, but errors will reset the pipeline
 		m.WaitForNewConfig()
 		m.StopPipeline()

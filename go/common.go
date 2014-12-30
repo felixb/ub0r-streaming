@@ -25,6 +25,8 @@ type Server struct {
 	Port     int
 	Internal bool
 	LastPing int64
+	RadioId  string
+	RadioUri string
 }
 
 type Receiver struct {
@@ -32,20 +34,13 @@ type Receiver struct {
 	Host     string
 	LastPing int64
 	Volume   int
+	ServerId string
 }
 
 type Config struct {
-	// map Server.Id() to active Radio.Id()
-	Servers   map[string]string
-	// map Recevier.Id() to active Server.Id()
-	Receivers map[string]string
-	Backends  *Backends
-}
-
-type Backends struct {
 	Radios        map[string]*Radio
-	Servers       map[string]*Server
 	Receivers     map[string]*Receiver
+	Servers       map[string]*Server
 }
 
 var (
@@ -73,21 +68,6 @@ func (r *Receiver) Id() string {
 
 func (r *Radio) Id() string {
 	return fmt.Sprintf("radio-%x", sha1.Sum([]byte(r.Uri)))
-}
-
-func (b *Backends) hasServer(id string) bool {
-	_, ok := b.Servers[id]
-	return ok
-}
-
-func (b *Backends) hasReceiver(id string) bool {
-	_, ok := b.Receivers[id]
-	return ok
-}
-
-func (b *Backends) hasRadio(id string) bool {
-	_, ok := b.Radios[id]
-	return ok
 }
 
 // ----- logging -------------------------------

@@ -120,9 +120,9 @@ func (m *Manager) watchConfig() {
 }
 
 func (m *Manager) getServer(config *Config) *Server {
-	id, ok := config.Receivers[m.Receiver().Id()]
-	if ok {
-		return config.Backends.Servers[id]
+	r, ok := config.Receivers[m.Receiver().Id()]
+	if ok && r.ServerId != "" {
+		return config.Servers[r.ServerId]
 	}
 	return nil
 }
@@ -201,7 +201,7 @@ func (m *Manager) playPipeline(server *Server) {
 
 func (m *Manager) updateReceiver(config *Config) {
 	// update m.Backend from config.Backends.Receivers
-	m.Backend = config.Backends.Receivers[m.Backend.Id()]
+	m.Backend = config.Receivers[m.Backend.Id()]
 	// update volume of playing pipeline
 	m.setVolume()
 }
@@ -275,9 +275,10 @@ func (m *Manager) startReceiver() {
 func main() {
 	hostname, _ := os.Hostname()
 	m := NewReceiver()
-	flag.StringVar(&m.Receiver().Name, "name", hostname, "receiver name")
-	flag.StringVar(&m.Receiver().Host, "host", hostname, "receiver host name")
+	r := m.Receiver()
 	flag.StringVar(&m.ConfigUri, "config-server", "http://localhost:8080", "config server base uri")
+	flag.StringVar(&r.Name, "name", hostname, "receiver name")
+	flag.StringVar(&r.Host, "host", hostname, "receiver host name")
 	verbose := flag.Bool("verbose", false, "verbose logging")
 	flag.Parse()
 	initLogger(*verbose)
