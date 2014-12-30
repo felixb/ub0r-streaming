@@ -86,23 +86,24 @@ function injectReceiver(r) {
     var activeRadio = getActiveRadio(activeServer);
     var activeRadioId = getRadioId(activeRadio);
     // inject 'off' server
-    servers += '<li data-icon="' + getIcon(offId == activeId, true) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=off">Off</a></li>';
+    servers += '<li data-icon="' + getIcon(offId == activeId, true) + '"><a class="api-call" href="/api/receiver?id=' + id + '&server=off">Off</a></li>';
     // add servers
     if (config.Backends.Servers) {
         eachSorted(config.Backends.Servers, sortNames, function(k, e) {
             if (!e.Internal) {
-                servers += '<li data-icon="' + getIcon(k == activeId, false) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=' + k + '">' + e.Name + '</a></li>';
+                servers += '<li data-icon="' + getIcon(k == activeId, false) + '"><a class="api-call" href="/api/receiver?id=' + id + '&server=' + k + '">' + e.Name + '</a></li>';
             }
         });
     }
     // add radios
     if (config.Backends.Radios) {
         eachSorted(config.Backends.Radios, sortNames, function(k, e) {
-            servers += '<li data-icon="' + getIcon(k == activeRadioId, false) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&radio=' + k + '">' + e.Name + '</a></li>';
+            servers += '<li data-icon="' + getIcon(k == activeRadioId, false) + '"><a class="api-call" href="/api/receiver?id=' + id + '&radio=' + k + '">' + e.Name + '</a></li>';
         });
     }
     servers += '</ul>';
-    $('#receiver-list').append('<div id="' + id + '"><h4>' + r.Name + '</h4>' + servers + '</div>');
+    volume = '<input class="volume-slider api-base" rel="/api/receiver?id=' + id + '&volume=" type="range" name="volume" id="volume-' + id + '" value="' + r.Volume + '" min="0" max="120" data-highlight="true" data-mini="true">';
+    $('#receiver-list').append('<div id="' + id + '"><h4>' + r.Name + '</h4>' + volume + servers + '</div>');
 }
 
 // create list radios
@@ -143,8 +144,8 @@ function injectBackends() {
       $('#radio-list').append("no radio defined");
     }
 
-    // init list views to make them look beautiful
-    $('.receiver-list-ul').listview().listview('refresh');
+    // init dynamically added views to make them look beautiful
+    $('html').trigger('create');
     $('.radio-list-ul').listview().listview('refresh');
 
     // replace api-calls with ajax requests
@@ -154,6 +155,8 @@ function injectBackends() {
     $('.dialog-edit-radio').click(onEditRadioClick);
     $('.dialog-delete-radio').unbind('click', onDeleteRadioClick);
     $('.dialog-delete-radio').click(onDeleteRadioClick);
+    $('.volume-slider').unbind('change', onVolumeChange);
+    $('.volume-slider').change(onVolumeChange);
 }
 
 function onApiCallClick(e) {
@@ -184,6 +187,14 @@ function onAddRadioSubmit(e) {
 function onDeleteRadioSubmit(e) {
     e.preventDefault();
     deleteRadio();
+}
+
+function onVolumeChange(e) {
+    var id = '#' + e.target.id;
+    var api = $(id).attr('rel');
+    var v = $(id).val();
+    api += v;
+    $.get(api);
 }
 
 // callback to update config

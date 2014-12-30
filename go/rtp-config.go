@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -21,7 +22,7 @@ const (
 
 var (
 	config Config
-	managers = make(map[string]*Manager)
+	managers       = make(map[string]*Manager)
 	configCond *sync.Cond
 	saveConfigLock = sync.Mutex{}
 	staticDir *string
@@ -189,26 +190,6 @@ func serveApiRadio(w http.ResponseWriter, req *http.Request) *ServeError {
 	return nil
 }
 
-// GET /api/receiver?receiver=${receiver-id}&server=${server-id}
-func serveApiReceiverServer(w http.ResponseWriter, req *http.Request, receiver_id, server_id string) *ServeError {
-	log.Debug("/api/receiver receiver: %s, server: %s", receiver_id, server_id)
-
-	if !config.Backends.hasReceiver(receiver_id) {
-		return NewInternalError(fmt.Sprintf("receiver not found: %s", receiver_id))
-	}
-
-	if server_id != "off" {
-		if !config.Backends.hasServer(server_id) {
-			return NewInternalError(fmt.Sprintf("server not found: %s", server_id))
-		}
-	}
-
-	log.Debug("setting new server for %s: %s", receiver_id, server_id)
-	config.Receivers[receiver_id] = server_id
-	notifyNewConfig()
-	return nil
-}
-
 func findServerWithRadio(radio_id string) (string, bool) {
 	for k, r := range config.Servers {
 		if r == radio_id {
@@ -275,13 +256,9 @@ func stopServer(server_id string) {
 	delete(config.Backends.Servers, server_id)
 }
 
-// GET /api/receiver?receiver=${receiver-id}&radio=${radio-id}
+// GET /api/receiver?id=${receiver-id}&radio=${radio-id}
 func serveApiReceiverRadio(w http.ResponseWriter, req *http.Request, receiver_id, radio_id string) *ServeError {
 	log.Debug("/api/receiver receiver: %s, radio: %s", receiver_id, radio_id)
-
-	if !config.Backends.hasReceiver(receiver_id) {
-		return NewInternalError(fmt.Sprintf("receiver not found: %s", receiver_id))
-	}
 
 	if radio_id != "off" {
 		if !config.Backends.hasRadio(radio_id) {
@@ -295,17 +272,60 @@ func serveApiReceiverRadio(w http.ResponseWriter, req *http.Request, receiver_id
 	return nil
 }
 
-// GET /api/receiver?receiver=${receiver-id}&server=${server-id}
-// GET /api/receiver?receiver=${receiver-id}&radio=${radio-id}
+// GET /api/receiver?id=${receiver-id}&server=${server-id}
+func serveApiReceiverServer(w http.ResponseWriter, req *http.Request, receiver_id, server_id string) *ServeError {
+	log.Debug("/api/receiver receiver: %s, server: %s", receiver_id, server_id)
+
+	if server_id != "off" {
+		if !config.Backends.hasServer(server_id) {
+			return NewInternalError(fmt.Sprintf("server not found: %s", server_id))
+		}
+	}
+
+	log.Debug("setting new server for %s: %s", receiver_id, server_id)
+	config.Receivers[receiver_id] = server_id
+	notifyNewConfig()
+	return nil
+}
+
+// GET /api/receiver?id=${receiver-id}&volume=[1,100]
+func serveApiReceiverVolume(w http.ResponseWriter, req *http.Request, receiver_id, volume string) *ServeError {
+	log.Debug("/api/receiver receiver: %s, volume: %s", receiver_id, volume)
+
+	v, err := strconv.Atoi(volume)
+	if err != nil {
+		return NewInternalError(fmt.Sprintf("invalid volume '%s': %s", volume, err))
+	}
+
+	if v < 0 || v > 1000 {
+		return NewInternalError(fmt.Sprintf("invalid volume '%d'", v))
+	}
+
+	log.Debug("setting new volume for %s: %d", receiver_id, v)
+	config.Backends.Receivers[receiver_id].Volume = v
+	notifyNewConfig()
+	return nil
+}
+
+// GET /api/receiver?id=${receiver-id}&server=${server-id}
+// GET /api/receiver?id=${receiver-id}&radio=${radio-id}
+// GET /api/receiver?id=${receiver-id}&volume=[0,100]
 func serveApiReceiver(w http.ResponseWriter, req *http.Request) *ServeError {
-	receiver_id := req.URL.Query().Get("receiver")
+	receiver_id := req.URL.Query().Get("id")
 	server_id := req.URL.Query().Get("server")
 	radio_id := req.URL.Query().Get("radio")
+	volume := req.URL.Query().Get("volume")
 
-	if server_id != "" && radio_id == "" {
+	if !config.Backends.hasReceiver(receiver_id) {
+		return NewInternalError(fmt.Sprintf("receiver not found: %s", receiver_id))
+	}
+
+	if server_id != "" && radio_id == "" && volume == "" {
 		return serveApiReceiverServer(w, req, receiver_id, server_id)
-	} else if radio_id != "" && server_id == "" {
+	} else if radio_id != "" && server_id == "" && volume == "" {
 		return serveApiReceiverRadio(w, req, receiver_id, radio_id)
+	} else if volume != "" && radio_id == "" && server_id == "" {
+		return serveApiReceiverVolume(w, req, receiver_id, volume)
 	} else {
 		return NewInternalError("server or radio is mandatory")
 	}
@@ -335,7 +355,7 @@ func serve(w http.ResponseWriter, req *http.Request) {
 		err = serveApiRadio(w, req)
 	} else if req.URL.Path == "/api/config" {
 		err = serveJson(w, req, config)
-	} else if req.URL.Path == "/api/receiver/" {
+	} else if req.URL.Path == "/api/receiver" {
 		err = serveApiReceiver(w, req)
 	} else {
 		http.NotFound(w, req)

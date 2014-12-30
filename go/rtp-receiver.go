@@ -138,12 +138,30 @@ func (m *Manager) checkServer(server *Server) bool {
 	return err == nil
 }
 
+func (m *Manager) setVolume() {
+	if m.Pipeline == nil {
+		return
+	}
+	volume := m.Pipeline.GetByName("volume")
+	if volume == nil {
+		log.Error("unable to find pipeline element 'volume'")
+		return
+	}
+	// rtp volume [0,100]
+	// gst volume [0,1]
+	v := float64(m.Receiver().Volume) / 100
+	log.Debug("set new volume: %d", v)
+	volume.SetProperty("volume", v)
+}
+
 func (m *Manager) buildPipeline(server *Server) {
 	src := makeElem("tcpclientsrc")
 	src.SetProperty("host", server.Host)
 	src.SetProperty("port", server.Port)
 	demux := makeElem("oggdemux")
 	dec := makeElem("opusdec")
+	volume := makeElem("volume")
+	volume.SetProperty("volume", 1.0)
 	sink := makeElem("alsasink")
 	sink.SetProperty("sync", false)
 
@@ -156,9 +174,12 @@ func (m *Manager) buildPipeline(server *Server) {
 	addElem(m.Pipeline, src)
 	addElem(m.Pipeline, demux)
 	addElem(m.Pipeline, dec)
+	addElem(m.Pipeline, volume)
 	addElem(m.Pipeline, sink)
 	linkElems(src, demux)
-	linkElems(dec, sink)
+	linkElems(dec, volume)
+	linkElems(volume, sink)
+	m.setVolume()
 }
 
 func (m *Manager) playPipeline(server *Server) {
@@ -176,6 +197,13 @@ func (m *Manager) playPipeline(server *Server) {
 		m.NewConfig(nil)
 		m.RetryCount = 0
 	}
+}
+
+func (m *Manager) updateReceiver(config *Config) {
+	// update m.Backend from config.Backends.Receivers
+	m.Backend = config.Backends.Receivers[m.Backend.Id()]
+	// update volume of playing pipeline
+	m.setVolume()
 }
 
 func (m *Manager) loop() {
@@ -200,7 +228,7 @@ func (m *Manager) loop() {
 		}
 		// watch state/config changes and restart pipeline
 		var newServer *Server
-		i := 0
+		first := true
 		for newServer == nil || (server != nil && server.Host == newServer.Host && server.Port == newServer.Port) {
 			log.Debug("wait for new config")
 			log.Debug("old server: %s", server)
@@ -210,15 +238,16 @@ func (m *Manager) loop() {
 				// state changed start all over
 				break
 			}
+			m.updateReceiver(config)
 			newServer = m.getServer(config)
 			// exit loop if server == off
 			if newServer == nil {
-				if i > 0 {
+				if !first {
 					time.Sleep(retryInterval)
 				}
 				break
 			}
-			i += 1
+			first = false
 		}
 		m.StopPipeline()
 	}

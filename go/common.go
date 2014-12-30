@@ -31,6 +31,7 @@ type Receiver struct {
 	Name     string
 	Host     string
 	LastPing int64
+	Volume   int
 }
 
 type Config struct {

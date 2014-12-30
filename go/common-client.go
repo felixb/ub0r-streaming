@@ -36,8 +36,10 @@ func newManager() *Manager {
 }
 
 func NewReceiver() *Manager {
+	r := Receiver{}
+	r.Volume = 100
 	m := newManager()
-	m.Backend = &Receiver{}
+	m.Backend = &r
 	return m
 }
 
