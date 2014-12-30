@@ -162,7 +162,7 @@ func (m *Manager) buildPipeline(server *Server) {
 	dec := makeElem("opusdec")
 	volume := makeElem("volume")
 	volume.SetProperty("volume", 1.0)
-	sink := makeElem("alsasink")
+	sink := makeElem("autoaudiosink")
 	sink.SetProperty("sync", false)
 
 	m.Pipeline = gst.NewPipeline("pipeline")
