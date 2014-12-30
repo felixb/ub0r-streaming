@@ -118,7 +118,7 @@ func (c *Config) hasRadio(id string) bool {
 
 // WebSocket /ws/config
 func serveWsConfig(ws *websocket.Conn) {
-	log.Info("serve: /ws/config")
+	log.Debug("serve: /ws/config")
 
 	for {
 		waitForNewConfig()
