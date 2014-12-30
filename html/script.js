@@ -2,7 +2,7 @@ var config = {};
 
 var defaultServer = {'Host': 'off', 'Port': 0};
 var defaultRadio = {'Uri': 'off', 'Name': 'off'};
-var offId = getServerId(defaultServer)
+var offId = getServerId(defaultServer);
 
 var deleteEditId = null;
 var deleteRadioId = null;
@@ -86,7 +86,7 @@ function injectReceiver(r) {
     var activeRadio = getActiveRadio(activeServer);
     var activeRadioId = getRadioId(activeRadio);
     // inject 'off' server
-    servers += '<li data-icon="' + getIcon(offId == activeId, true) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=' + offId + '">Off</a></li>';
+    servers += '<li data-icon="' + getIcon(offId == activeId, true) + '"><a class="api-call" href="/api/receiver/?receiver=' + id + '&server=off">Off</a></li>';
     // add servers
     if (config.Backends.Servers) {
         eachSorted(config.Backends.Servers, sortNames, function(k, e) {
