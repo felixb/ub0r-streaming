@@ -200,7 +200,7 @@ func findServerWithRadio(radio_id string) (string, bool) {
 }
 
 func findFreePort() int {
-	port := 48100
+	port := 48110
 	ok := false
 	for !ok {
 		ok = true

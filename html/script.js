@@ -2,7 +2,7 @@ var config = {};
 
 var defaultServer = {'Host': 'off', 'Port': 0};
 var defaultRadio = {'Uri': 'off', 'Name': 'off'};
-var offId = getServerId(defaultServer);
+var offId = 'off';
 
 var deleteEditId = null;
 var deleteRadioId = null;
@@ -27,45 +27,26 @@ function eachSorted(obj, s, f) {
 
 // get active radio for a given server
 // result is never undefined
-function getActiveRadio(server) {
+function getActiveRadioId(serverId) {
     try {
-        var id = config.Servers[getServerId(server)]
-        var r = id ? config.Backends.Radios[id] : null;
-        return  r ? r : defaultRadio;
+        var id = config.Servers[serverId]
+        return id ? id : offId;
     } catch (err) {
         console.log(err);
-        return defaultRadio;
+        return offId;
     }
 }
 
 // get active server for a given receiver
 // result is never undefined
-function getActiveServer(receiver) {
-    // TODO handle internal servers -> radioId?
+function getActiveServerId(receiverId) {
     try {
-        var id = config.Receivers[getReceiverId(receiver)];
-        var s = id ? config.Backends.Servers[id] : null;
-        return s ? s : defaultServer;
+        var id = config.Receivers[receiverId];
+        return id ? id : offId;
     } catch (err) {
         console.log(err);
-        return defaultServer;
+        return offId;
     }
-}
-
-// create server html id
-function getServerId(server) {
-    return 'server-' + server.Host + ':' + server.Port;
-}
-
-// create receiver html id
-function getReceiverId(receiver) {
-    return 'receiver-' + receiver.Name;
-}
-
-// create receiver html id
-function getRadioId(radio) {
-    var hash = CryptoJS.SHA1(radio.Uri);
-    return 'radio-' + hash.toString(CryptoJS.enc.Hex);
 }
 
 // get data-icon value
@@ -78,20 +59,17 @@ function getIcon(active, off) {
 }
 
 // create list of servers for a single receiver
-function injectReceiver(r) {
-    var id = getReceiverId(r);
+function injectReceiver(id, r) {
     var servers = '<ul class="receiver-list-ul" data-role="listview" data-inset="true">';
-    var activeServer = getActiveServer(r);
-    var activeId = getServerId(activeServer);
-    var activeRadio = getActiveRadio(activeServer);
-    var activeRadioId = getRadioId(activeRadio);
+    var activeServerId = getActiveServerId(id);
+    var activeRadioId = getActiveRadioId(activeServerId);
     // inject 'off' server
-    servers += '<li data-icon="' + getIcon(offId == activeId, true) + '"><a class="api-call" href="/api/receiver?id=' + id + '&server=off">Off</a></li>';
+    servers += '<li data-icon="' + getIcon(offId == activeServerId, true) + '"><a class="api-call" href="/api/receiver?id=' + id + '&server=' + offId + '">Off</a></li>';
     // add servers
     if (config.Backends.Servers) {
         eachSorted(config.Backends.Servers, sortNames, function(k, e) {
             if (!e.Internal) {
-                servers += '<li data-icon="' + getIcon(k == activeId, false) + '"><a class="api-call" href="/api/receiver?id=' + id + '&server=' + k + '">' + e.Name + '</a></li>';
+                servers += '<li data-icon="' + getIcon(k == activeServerId, false) + '"><a class="api-call" href="/api/receiver?id=' + id + '&server=' + k + '">' + e.Name + '</a></li>';
             }
         });
     }
@@ -107,8 +85,7 @@ function injectReceiver(r) {
 }
 
 // create list radios
-function injectRadio(r) {
-    var id = getRadioId(r);
+function injectRadio(id, r) {
     radio = '<li id="' + id + '"><div class="ui-grid-a">';
     radio += '<div class="ui-block-a">';
     radio += '<h2>' + r.Name + '</h2>';
@@ -128,7 +105,7 @@ function injectBackends() {
     $('#receiver-list').empty();
     if (isNotEmpty(config.Backends.Receivers)) {
         eachSorted(config.Backends.Receivers, sortNames, function(k, e) {
-            injectReceiver(e);
+            injectReceiver(k, e);
         });
     } else {
       $('#receiver-list').append("no active receiver found");
@@ -138,7 +115,7 @@ function injectBackends() {
     $('#radios-list').empty();
     if (isNotEmpty(config.Backends.Radios)) {
         eachSorted(config.Backends.Radios, sortNames, function(k, e) {
-            injectRadio(e);
+            injectRadio(k, e);
         });
     } else {
       $('#radio-list').append("no radio defined");
@@ -199,12 +176,6 @@ function onVolumeChange(e) {
 
 // callback to update config
 function updateConfig(data) {
-    // enrich config data
-    data.Backends.RadiosByKey = {};
-    $.each(data.Backends.Radios, function(k,e) {
-        data.Backends.RadiosByKey[getRadioId(e)] = e;
-    });
-
     config = data;
     injectBackends();
 }
@@ -231,8 +202,8 @@ function watchConfig() {
 function showEditRadioDialog(id) {
     editRadioId = id;
     if (id) {
-        $("#add-radio-name").val(config.Backends.RadiosByKey[id].Name);
-        $("#add-radio-uri").val(config.Backends.RadiosByKey[id].Uri);
+        $("#add-radio-name").val(config.Backends.Radios[id].Name);
+        $("#add-radio-uri").val(config.Backends.Radios[id].Uri);
     } else {
         $("#add-radio-name").val("");
         $("#add-radio-uri").val("");
