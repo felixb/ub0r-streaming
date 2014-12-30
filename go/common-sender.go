@@ -37,7 +37,9 @@ func (m *Manager) buildSrc(uri string) *gst.Element {
 	} else {
 		src = makeElem("uridecodebin")
 		src.SetProperty("uri", uri)
-		src.SetProperty("buffer-duration", 1000)
+		src.SetProperty("download", true)
+		src.SetProperty("use-buffering", true)
+		src.SetProperty("buffer-duration", 2000)
 	}
 	return src
 }
@@ -48,10 +50,12 @@ func (m *Manager) buildPipeline(uri string) {
 	pipe2 := makeElem("audioresample")
 	pipe3 := makeElem("opusenc")
 	pipe3.SetProperty("bitrate", 96000)
+	pipe3.SetProperty("bandwith", "auto")
+	pipe3.SetProperty("audio", true)
 	pipe3.SetProperty("dtx", true)
-	pipe3.SetProperty("inband-fec", false)
 	pipe3.SetProperty("packet-loss-percentage", 0)
 	pipe4 := makeElem("oggmux")
+	pipe5 := makeElem("queue2")
 	sink := makeElem("tcpserversink")
 	s := m.Server()
 	sink.SetProperty("host", s.Host)
@@ -68,12 +72,14 @@ func (m *Manager) buildPipeline(uri string) {
 	addElem(m.Pipeline, pipe2)
 	addElem(m.Pipeline, pipe3)
 	addElem(m.Pipeline, pipe4)
+	addElem(m.Pipeline, pipe5)
 	addElem(m.Pipeline, sink)
 	linkElems(src, pipe1)
 	linkElems(pipe1, pipe2)
 	linkElems(pipe2, pipe3)
 	linkElems(pipe3, pipe4)
-	linkElems(pipe4, sink)
+	linkElems(pipe4, pipe5)
+	linkElems(pipe5, sink)
 }
 
 func (m *Manager) playPipeline(uri string) {
