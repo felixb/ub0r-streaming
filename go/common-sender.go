@@ -68,10 +68,20 @@ func (m *Manager) buildPipeline(uri string) {
 	addElem(m.Pipeline, sink)
 	linkElems(src, pipe1)
 	linkElems(pipe1, pipe2)
-	linkElems(pipe2, pipe3)
 	linkElems(pipe3, pipe4)
 	linkElems(pipe4, pipe5)
 	linkElems(pipe5, sink)
+
+	if m.Server().Internal {
+		// insert level before encoding audio stream
+		level := makeElem("level")
+		level.SetProperty("interval", 5000000000)
+		addElem(m.Pipeline, level)
+		linkElems(pipe2, level)
+		linkElems(level, pipe3)
+	} else {
+		linkElems(pipe2, pipe3)
+	}
 }
 
 func (m *Manager) playPipeline(uri string) {

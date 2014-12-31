@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/ziutek/glib"
 	"github.com/ziutek/gst"
 )
 
@@ -25,6 +26,7 @@ type Manager struct {
 	Backend    Pinger
 	RetryCount int
 	running    bool
+	OnLevel    func(*Manager, glib.Params)
 }
 
 func newManager() *Manager {
@@ -80,6 +82,11 @@ func (m *Manager) onMessage(bus *gst.Bus, msg *gst.Message) {
 		// try to reconnect
 		time.Sleep(retryInterval)
 		m.NewConfig(nil)
+	case gst.MESSAGE_ELEMENT:
+		name, fields := msg.GetStructure()
+		if m.OnLevel != nil && name == "level" {
+			m.OnLevel(m, fields)
+		}
 	case gst.MESSAGE_BUFFERING:
 		// ignore
 	default:

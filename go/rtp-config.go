@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"code.google.com/p/go.net/websocket"
+	"github.com/ziutek/glib"
 )
 
 const (
@@ -227,6 +228,11 @@ func findFreePort() int {
 	return port
 }
 
+func onLevel(m *Manager, fields glib.Params) {
+	log.Debug("peak: %s", fields["peak"])
+	// TODO fields["peak"] is of type glib.Pointer, how do I get []uint64 out of it?
+}
+
 func spawnServer(radio_id string) string {
 	r := config.Radios[radio_id]
 	log.Info("spawning new sender for radio: %s", r.Uri)
@@ -237,6 +243,7 @@ func spawnServer(radio_id string) string {
 	s.Host = hostname
 	s.Port = findFreePort()
 	m.ConfigUri = fmt.Sprintf("http://localhost:%d", *port)
+	m.OnLevel = onLevel
 	s.RadioId = radio_id
 	s.RadioUri = r.Uri
 	server_id := s.Id()
