@@ -264,6 +264,7 @@ func stopServer(server_id string) {
 	m := managers[server_id]
 	m.stopSender()
 	delete(config.Servers, server_id)
+	delete(managers, server_id)
 }
 
 // GET /api/receiver?id=${receiver-id}&radio=${radio-id}
@@ -448,21 +449,18 @@ func scheduleBackendTimeout(c <-chan time.Time) {
 		now := t.Unix()
 		threshold := now - int64(backendTimeout / time.Second)
 
-		for k, o := range config.Receivers {
-			if o.LastPing < threshold {
-				log.Info("remove possibly dead receiver: %s", o.Id())
-				delete(config.Receivers, k)
-			}
-		}
 		for k, o := range config.Servers {
 			if !o.Internal && o.LastPing < threshold {
-				log.Info("remove possibly dead server: %s", o.Id())
+				log.Info("remove possibly dead server: %s", k)
 				delete(config.Servers, k)
 			}
 		}
-		// reset server id, if missing
-		for _, o := range config.Receivers {
-			if !config.hasServer(o.ServerId) {
+		for k, o := range config.Receivers {
+			if o.LastPing < threshold {
+				log.Info("remove possibly dead receiver: %s", k)
+				delete(config.Receivers, k)
+			} else if !config.hasServer(o.ServerId) {
+				log.Info("reset receiver caused by missing server: %s", k)
 				o.ServerId = "off"
 			}
 		}
