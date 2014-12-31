@@ -227,7 +227,7 @@ func findFreePort() int {
 	return port
 }
 
-func spawnServer(radio_id string) *Manager {
+func spawnServer(radio_id string) string {
 	r := config.Radios[radio_id]
 	log.Info("spawning new sender for radio: %s", r.Uri)
 	hostname, _ := os.Hostname()
@@ -241,23 +241,20 @@ func spawnServer(radio_id string) *Manager {
 	s.RadioUri = r.Uri
 	server_id := s.Id()
 	config.Servers[server_id] = s
-	return m
+	managers[server_id] = m
+	go m.startSender()
+	return server_id
 }
 
 func findOrSpawnServer(radio_id string) string {
 	// check if some server is already playing this stream
-	server_id, ok := findServerWithRadio(radio_id)
-	if ok {
+	if server_id, ok := findServerWithRadio(radio_id); ok {
 		log.Debug("found running server for radio: %s, %s", radio_id, server_id)
 		return server_id
 	}
 
 	// spawn new server
-	m := spawnServer(radio_id)
-	server_id = m.Server().Id()
-	managers[server_id] = m
-	go m.startSender()
-	return server_id
+	return spawnServer(radio_id)
 }
 
 func stopServer(server_id string) {
