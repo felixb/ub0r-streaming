@@ -27,6 +27,7 @@ var (
 	saveConfigLock = sync.Mutex{}
 	staticDir *string
 	port *int
+	complexity *int
 )
 
 // Locking -----------------------------------------
@@ -237,6 +238,7 @@ func spawnServer(radio_id string) string {
 	s.Host = hostname
 	s.Port = findFreePort()
 	m.ConfigUri = fmt.Sprintf("http://localhost:%d", *port)
+	m.Complexity = *complexity
 	s.RadioId = radio_id
 	s.RadioUri = r.Uri
 	server_id := s.Id()
@@ -493,9 +495,15 @@ func main() {
 	configFile := flag.String("config-cache", configCacheFile, "File for persisting config state")
 	port = flag.Int("http", 8080, "Port for binding the config server")
 	staticDir = flag.String("webroot", "static", "Directory for serving static content")
+	complexity = flag.Int("complexity", 10, "opusenc: complexity [0-10]")
 	verbose := flag.Bool("verbose", false, "verbose logging")
 	flag.Parse()
 	initLogger(*verbose)
+
+	if *complexity < 0 || *complexity > 10 {
+		log.Error("--complexity must be between 0 and 10")
+		os.Exit(1)
+	}
 
 	log.Info("starting")
 	locker := &sync.Mutex{}

@@ -21,6 +21,7 @@ type Manager struct {
 	Pipeline   *gst.Pipeline
 	configSync chan *Config
 	ConfigUri  string
+	Complexity int
 	State      gst.State
 	Backend    Pinger
 	RetryCount int
