@@ -86,7 +86,7 @@ func (c *Config) pingServer(o *Server) {
 	id := o.Id()
 	if s, ok := c.Servers[id]; ok {
 		s.Ping()
-	}else {
+	} else {
 		c.Servers[id] = o
 		o.Ping()
 	}
