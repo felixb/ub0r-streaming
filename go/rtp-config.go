@@ -458,8 +458,8 @@ func scheduleBackendTimeout(c <-chan time.Time) {
 			if o.LastPing < threshold {
 				log.Info("remove possibly dead receiver: %s", k)
 				delete(config.Receivers, k)
-			} else if !config.hasServer(o.ServerId) {
-				log.Info("reset receiver caused by missing server: %s", k)
+			} else if o.ServerId != "off" && !config.hasServer(o.ServerId) {
+				log.Info("reset receiver caused by missing server: %s -> %s", k, o.ServerId)
 				o.ServerId = "off"
 			}
 		}
